@@ -97,18 +97,16 @@ def main():
 
     for idx in range(round(len(caracts_pd)/windows_size)):
         batch_x = np.array([caracts_pd[idx*windows_size:idx*windows_size + windows_size, :]])
-        # time_x = time_s[idx*windows_size:idx*windows_size + windows_size][0]
-        # time = datetime.fromtimestamp(time_x).strftime('%H:%M:%S.%f')
         batch_x_restored = autoencoder_load.predict(batch_x, verbose=0)
         loss = keras.losses.kl_divergence(batch_x, batch_x_restored)
         mean_loss = np.mean(np.array(loss)[0])
-        # loss_time["Time"].append(time)
         loss_arr.append(mean_loss)
+        loss_time["Loss"].append(mean_loss)
 
     plt.plot(loss_arr, linewidth=2.0)
     plt.show()
 
-        # print(f"Time: {time},   Loss: {mean_loss}")
+    # print(f"Time: {time},   Loss: {mean_loss}")
 
     # step = 600
     # for idx in range(0, len(caracts_pd)-windows_size, step):
@@ -122,7 +120,7 @@ def main():
     #     loss_time["Loss"].append(mean_loss)
     #     # print(f"Time: {time},   Loss: {mean_loss}")
 
-    # pd.DataFrame(loss_time).to_csv("VNAT_res_5.csv", index=False)
+    pd.DataFrame(loss_time).to_csv("VNAT_res_6.csv", index=False)
 
 
 if __name__ == '__main__':

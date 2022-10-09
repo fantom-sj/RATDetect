@@ -30,33 +30,22 @@ def merge_csv(path, csv_file_arr):
     """
         Функция для слияния заданного списка csv файлов, с последующим сохранением в итоговый csv
     """
-    print("Начать объединение файлов.")
+    print("Начато объединение файлов.")
     csv_all = pd.DataFrame()
     for file in csv_file_arr:
         temp_pandas = pd.read_csv(file)
         csv_all = pd.concat([csv_all, temp_pandas], ignore_index=False)
 
-    csv_all.to_csv(path + "itog.csv", index=False)
-
-
-def merge_rat_and_norat_csv(path, csv_file_arr):
-    """
-        Функция для слияния заданного списка csv файлов, с последующим сохранением в итоговый csv
-    """
-    print("Начать объединение файлов.")
-    csv_all = pd.DataFrame()
-    for file in csv_file_arr:
-        temp_pandas = pd.read_csv(file)
-        csv_all = pd.concat([csv_all, temp_pandas], ignore_index=False)
-
-    csv_all.to_csv(path + "RAT_and_NoRAT.csv", index=False)
+    csv_all.to_csv(path + "itog_video.csv", index=False)
 
 
 def main():
-    path = Path("data\\")
+    path = Path("F:\\VNAT\\temp")
     file_arr = []
     for file in path.iterdir():
-        if ".csv" in str(file):
+        file = str(file)
+        if (".csv" in file and "nonvpn" in file) and \
+                ("netflix" in file or "vimeo" in file or "youtube" in file):
             file_arr.append(str(file))
             print(str(file))
 
