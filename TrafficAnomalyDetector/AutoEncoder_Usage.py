@@ -71,11 +71,11 @@ def plot_cont(yi, xmax):
 
 
 def main():
-    model_name = "model_GRU_e10"
+    model_name = "model_GRU_VNAT_video"
     max_min_file = "max_and_min_e10.csv"
     path_name = "..\\data\\pcap\\temp\\characts.csv"
     characts_file = "characts_NoRAT.csv"
-    windows_size = 2000
+    windows_size = 1000
 
     # Preproccessing(windows_size)
     # autoencoder = Autoencoder(caracts_count=caracts_count, count_hidden_layers=count_hidden_layers, windows_size=windows_size)

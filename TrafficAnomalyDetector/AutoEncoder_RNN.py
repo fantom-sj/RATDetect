@@ -6,60 +6,14 @@
 import tensorflow as tf
 from tensorflow import keras
 from keras import Model, Sequential
-from keras.layers import Layer, GRU, InputLayer
+from keras.layers import GRU
+from keras.utils import Progbar
 
 import pandas as pd
 import numpy as np
 import random
 
 from tensorflow.python.client import device_lib
-
-
-class DecEncoder(Layer):
-    """
-        Класс описывающий внутреннюю структуру автоэнкодера,
-        а именно какие в нем имеются скрытые слои и как они
-        взаимодействуют друг с другом.
-    """
-
-    def __init__(self, input_shape, type, seed_kernel_init, count_hidden_layers):
-        super(DecEncoder, self).__init__()
-        self.input_layer = InputLayer(input_shape)
-        self.batch_size, self.windows_size, self.caracts_count = input_shape
-        self.count_hidden_layers = count_hidden_layers
-        self.seed_kernel_init = seed_kernel_init
-
-        self.hidden_layers = Sequential()
-        self.output_layer = Sequential()
-
-        if type == "encoder":
-            start = 0
-            end = self.count_hidden_layers * (-1)
-            step = -1
-        else:
-            start = (self.count_hidden_layers-1) * (-1)
-            end = 1
-            step = 1
-
-        index = 0
-        for i in range(start, end, step):
-            self.hidden_layers.add(
-                GRU(
-                    units=self.caracts_count + i,
-                    activation="tanh",
-                    kernel_initializer=keras.initializers.he_uniform(self.seed_kernel_init),
-                    return_sequences=True,
-                    name="hidden_layer_" + str(index),
-                    input_shape=(self.windows_size, self.caracts_count + i)
-                )
-            )
-            index += 1
-
-    def call(self, input_characts):
-        activation = self.input_layer(input_characts)
-        activation = self.hidden_layers(activation)
-        activation = self.output_layer(activation)
-        return activation
 
 
 class Autoencoder(Model):
@@ -73,41 +27,116 @@ class Autoencoder(Model):
                  batch_size=1, windows_size=1000, count_hidden_layers=1):
         super(Autoencoder, self).__init__()
         self.batch_size = batch_size
+        self.windows_size = windows_size
         self.caracts_count = caracts_count
-        self.encoder = DecEncoder(input_shape=(batch_size, windows_size, caracts_count), type="encoder",
-                                  seed_kernel_init=seed_kernel_init, count_hidden_layers=count_hidden_layers)
-        self.decoder = DecEncoder(input_shape=(batch_size, windows_size, caracts_count), type="decoder",
-                                  seed_kernel_init=seed_kernel_init, count_hidden_layers=count_hidden_layers)
+        self.seed_kernel_init = seed_kernel_init
+        self.count_hidden_layers = count_hidden_layers
+
+        self.encoder = Sequential(name="Encoder")
+        self.middle = Sequential(name="Middle")
+        self.decoder = Sequential(name="Decoder")
+
+        index = 0
+        for i in range(0, self.count_hidden_layers * (-1), -1):
+            self.encoder.add(
+                GRU(
+                    units=self.caracts_count + i,
+                    activation="tanh",
+                    kernel_initializer=keras.initializers.he_uniform(self.seed_kernel_init),
+                    return_sequences=True,
+                    name="enc_hid_layer_" + str(index),
+                    input_shape=(self.windows_size, self.caracts_count + i)
+                )
+            )
+            index += 1
+
+        self.middle.add(
+            GRU(
+                units=self.caracts_count - index,
+                activation="tanh",
+                kernel_initializer=keras.initializers.he_uniform(self.seed_kernel_init),
+                return_sequences=True,
+                name="mid_hid_layer",
+                input_shape=(self.windows_size, self.caracts_count - index + 1)
+            )
+        )
+
+        index = 0
+        for i in range((self.count_hidden_layers - 1) * (-1), 1, 1):
+            self.decoder.add(
+                GRU(
+                    units=self.caracts_count + i,
+                    activation="tanh",
+                    kernel_initializer=keras.initializers.he_uniform(self.seed_kernel_init),
+                    return_sequences=True,
+                    name="dec_hid_layer_" + str(index),
+                    input_shape=(self.windows_size, self.caracts_count + i - 1)
+                )
+            )
+            index += 1
 
         self.loss_tracker = keras.metrics.Mean(name="loss")
         self.mae_metric = keras.metrics.MeanAbsoluteError(name="mae")
+        self.history_loss = {"epoch": [], "step": [], "loss": [], "mean_loss": [], "mae": []}
 
-    def train_step(self, data):
-        x = data
+    def train_step(self, x_batch_train):
 
         with tf.GradientTape() as tape:
-            y_pred = self(x, training=True)
-            loss = keras.losses.kl_divergence(x, y_pred)
-            # loss = keras.losses.kl_divergence(x, y_pred)
+            logits = self.call(x_batch_train)
+            loss_value = keras.losses.kl_divergence(x_batch_train, logits)
 
-        # Вычисляем градиент
         trainable_vars = self.trainable_variables
-        gradients = tape.gradient(loss, trainable_vars)
+        gradients = tape.gradient(loss_value, trainable_vars)
 
         # Обновляем веса
         self.optimizer.apply_gradients(zip(gradients, trainable_vars))
 
-        # Расчитываем выходные метрики
-        self.loss_tracker.update_state(loss)
-        self.mae_metric.update_state(x, y_pred)
+        # Обновляем метрику на обучении.
+        loss = float(np.mean(np.array(loss_value)[0]))
+        self.loss_tracker.update_state(loss_value)
+        self.mae_metric.update_state(x_batch_train, logits)
 
-        return {"Расхождение": loss, "Средние расхождение": self.loss_tracker.result(),
-                "Средняя абсолютная ошибка": self.mae_metric.result()}
+        return loss
+
+    def education(self, training_dataset, epochs=1, shuffle=True):
+        loss = 0
+        metrics_names = ["Расхождение", "Средние расхождение", "Средняя абсолютная ошибка"]
+
+        for epoch in range(epochs):
+            print("Эпоха {}/{}".format(epoch+1, epochs))
+
+            progress_bar = Progbar(round(training_dataset.numbs_count / self.batch_size)-1,
+                                   stateful_metrics=metrics_names)
+
+            # Итерируем по пакетам в датасете.
+            for step, x_batch_train in enumerate(training_dataset):
+                loss = self.train_step(x_batch_train)
+
+                loss_tracker_res = self.loss_tracker.result()
+                mae_metric_res = self.mae_metric.result()
+
+                # Пишем лог после прохождения каждого батча
+                self.history_loss["epoch"].append(epoch)
+                self.history_loss["step"].append(step)
+                self.history_loss["loss"].append(loss)
+                self.history_loss["mean_loss"].append(float(loss_tracker_res))
+                self.history_loss["mae"].append(float(mae_metric_res))
+
+                values = [("Расхождение", loss),
+                          ("Средние расхождение", (float(loss_tracker_res))),
+                          ("Средняя абсолютная ошибка", (float(mae_metric_res)))]
+
+                progress_bar.add(1, values=values)
+
+            if shuffle:
+                training_dataset.on_epoch_end()
+        print("Обучение завершено!\n")
 
     def call(self, input_features):
-        code = self.encoder(input_features)
-        reconstructed = self.decoder(code)
-        return reconstructed
+        compression = self.encoder(input_features)
+        transfer = self.middle(compression)
+        reconstruction = self.decoder(transfer)
+        return reconstruction
 
     @property
     def metrics(self):
@@ -123,7 +152,7 @@ class TrainingDatasetGen(keras.utils.Sequence):
 
     def __init__(self, training_dataset, batch_size, windows_size, max_min_file):
         self.training_dataset = self.normalization(training_dataset, max_min_file).to_numpy()
-        self.training_dataset = self.training_dataset[:round(len(self.training_dataset)/batch_size)*batch_size]
+        self.training_dataset = self.training_dataset[:round(len(self.training_dataset) / batch_size) * batch_size]
         print("Нормализация данных выполнена.")
 
         self.numbs_count, self.caracts_count = self.training_dataset.shape
@@ -146,11 +175,14 @@ class TrainingDatasetGen(keras.utils.Sequence):
         return pd_data
 
     def __len__(self):
-        return round((self.numbs_count - self.windows_size)/self.batch_size)
+        return round((self.numbs_count - self.windows_size) / self.batch_size)
 
     def __getitem__(self, idx):
-        batch_x = np.array([self.training_dataset[idx*self.batch_size:idx*self.batch_size + self.windows_size, :]])
+        batch_x = np.array([self.training_dataset[idx * self.batch_size:idx * self.batch_size + self.windows_size, :]])
         return batch_x
+
+    def on_epoch_end(self):
+        np.random.shuffle(self.training_dataset)
 
 
 def main():
@@ -165,7 +197,7 @@ def main():
     seed = random.randint(3654756461, 9834548734)
     windows_size = 1000
     epochs = 5
-    model_name = "model_GRU_VNAT_video"
+    model_name = "model_GRU_VNAT_video_h7_e5"
 
     training_dataset = TrainingDatasetGen(data, batch_size, windows_size, max_min_file)
     print(training_dataset.numbs_count, training_dataset.caracts_count)
@@ -179,17 +211,15 @@ def main():
     print("Автоэнкодер определён.")
 
     print("Начинаем обучение:")
-    history = autoencoder.fit(training_dataset, epochs=epochs, batch_size=batch_size, shuffle=True, verbose=1)
-    # autoencoder_load = keras.models.load_model(model_name)
-    # autoencoder_load.compile(optimizer="adam", loss="kdl")
-    # history = autoencoder_load.fit(training_dataset, epochs=epochs, batch_size=batch_size, shuffle=True, verbose=1)
-    autoencoder.save(model_name)
+    autoencoder.education(training_dataset, epochs=epochs, shuffle=True)
+    autoencoder.build((batch_size, windows_size, training_dataset.caracts_count))
     autoencoder.summary()
-    autoencoder.encoder.hidden_layers.summary()
-    autoencoder.decoder.hidden_layers.summary()
+    autoencoder.encoder.summary()
+    autoencoder.middle.summary()
+    autoencoder.decoder.summary()
+    autoencoder.save(model_name)
 
-    # print(history.history)
-    pd.DataFrame(history.history).to_csv("History_train_VNAT_3.csv", index=False)
+    pd.DataFrame(autoencoder.history_loss).to_csv("History_train_VNAT_video_1.csv", index=False)
 
 
 if __name__ == '__main__':
