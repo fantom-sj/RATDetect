@@ -76,13 +76,13 @@ class Autoencoder(Model):
             index += 1
 
         self.loss_tracker = keras.metrics.Mean(name="loss")
+        self.valid_loss_tracker = keras.metrics.Mean(name="valid_loss")
         self.mae_metric = keras.metrics.MeanAbsoluteError(name="mae")
         self.history_loss = {"epoch": [], "step": [], "loss": [], "mean_loss": [], "mae": []}
 
     def train_step(self, x_batch_train):
-
         with tf.GradientTape() as tape:
-            logits = self.call(x_batch_train)
+            logits = self.__call__(x_batch_train)
             loss_value = keras.losses.kl_divergence(x_batch_train, logits)
 
         trainable_vars = self.trainable_variables
@@ -98,7 +98,7 @@ class Autoencoder(Model):
 
         return loss
 
-    def education(self, training_dataset, epochs=1, shuffle=True):
+    def education(self, training_dataset, epochs=1, shuffle=True, model_chekname="model"):
         loss = 0
         metrics_names = ["Расхождение", "Средние расхождение", "Средняя абсолютная ошибка"]
 
@@ -128,6 +128,27 @@ class Autoencoder(Model):
 
                 progress_bar.add(1, values=values)
 
+            self.loss_tracker.reset_states()
+            self.mae_metric.reset_states()
+
+            valid_metrics_name = ["Расхождение", "Средние расхождение"]
+            print("Валидация после эпохи {}".format(epoch+1))
+            progress_bar_valid = Progbar(round(training_dataset.valid_count / self.batch_size) - 1,
+                                         stateful_metrics=valid_metrics_name)
+
+            for valid_batch_x in training_dataset.get_valid_item():
+                val_logits = self.__call__(valid_batch_x)
+                valid_loss_value = keras.losses.kl_divergence(valid_batch_x, val_logits)
+
+                valid_loss = float(np.mean(np.array(valid_loss_value)[0]))
+                self.valid_loss_tracker.update_state(valid_loss_value)
+
+                values = [("Расхождение", valid_loss),
+                          ("Средние расхождение", (float(self.valid_loss_tracker.result())))]
+
+                progress_bar_valid.add(1, values=values)
+
+            self.save(model_chekname+"_e"+str(epoch+1))
             if shuffle:
                 training_dataset.on_epoch_end()
         print("Обучение завершено!\n")
@@ -150,16 +171,26 @@ class TrainingDatasetGen(keras.utils.Sequence):
         чтобы в дальнейшем передавать по одному батчу в нейронную сеть для очередного шага обучения.
     """
 
-    def __init__(self, training_dataset, batch_size, windows_size, max_min_file):
-        self.training_dataset = self.normalization(training_dataset, max_min_file).to_numpy()
-        self.training_dataset = self.training_dataset[:round(len(self.training_dataset) / batch_size) * batch_size]
+    def __init__(self, dataset, max_min_file, batch_size=1000, windows_size=1000, validation_factor=0.2):
+        # Нормализуем данные
+        self.dataset = self.normalization(dataset, max_min_file).to_numpy()
         print("Нормализация данных выполнена.")
 
-        self.numbs_count, self.caracts_count = self.training_dataset.shape
+        self.numbs_count, self.caracts_count = self.dataset.shape
+
         self.windows_size = windows_size
         self.batch_size = batch_size
 
-    def normalization(self, pd_data, max_min_file):
+        # Получаем размеры тренировочной и валидационной выборки
+        self.valid_count = round(self.numbs_count * validation_factor / batch_size) * batch_size
+        self.numbs_count = round(len(self.dataset) / batch_size) * batch_size - self.valid_count
+
+        # Создаём тренировочную и валидационную выборку
+        self.training_dataset = self.dataset[:self.numbs_count]
+        self.valid_dataset    = self.dataset[self.numbs_count:round(len(self.dataset) / batch_size) * batch_size]
+
+    @staticmethod
+    def normalization(pd_data, max_min_file):
         data_max = pd_data.max()
         data_min = pd_data.min()
         cols_name = []
@@ -181,37 +212,58 @@ class TrainingDatasetGen(keras.utils.Sequence):
         batch_x = np.array([self.training_dataset[idx * self.batch_size:idx * self.batch_size + self.windows_size, :]])
         return batch_x
 
+    def get_valid_len(self):
+        return round((self.valid_count - self.windows_size) / self.batch_size)
+
+    def get_valid_item(self):
+        len_valid = self.get_valid_len()
+        for idx in range(len_valid):
+            valid_batch_x = np.array(
+                [self.valid_dataset[idx * self.batch_size:idx * self.batch_size + self.windows_size, :]])
+            yield valid_batch_x
+
     def on_epoch_end(self):
         np.random.shuffle(self.training_dataset)
+        np.random.shuffle(self.valid_dataset)
 
 
 def main():
-    data = pd.read_csv("F:\\VNAT\\itog_video.csv")
-    max_min_file = "max_and_min_video.csv"
+    batch_size          = 1000
+    count_hidden_layers = 2
+    validation_factor   = 0.15
+    windows_size        = 1000
+    epochs              = 2
+    seed = random.randint(3654756461, 9834548734)
+    model_name          = "model_GRU_traffic_h7"
+    max_min_file        = "MaM_traffic.csv"
+    path                = "C:\\Users\\Admin\\SnHome\\P2\\characts_06.csv"
+    history_name        = "History_train_traffic_1.csv"
 
+    data = pd.read_csv(path)
     data = data.drop(["Time_Stamp"], axis=1)
     print("Загрузка датасета завершена.")
 
-    batch_size = 1000
-    count_hidden_layers = 7
-    seed = random.randint(3654756461, 9834548734)
-    windows_size = 1000
-    epochs = 5
-    model_name = "model_GRU_VNAT_video_h7_e5"
-
-    training_dataset = TrainingDatasetGen(data, batch_size, windows_size, max_min_file)
+    training_dataset = TrainingDatasetGen(data, max_min_file, batch_size, windows_size, validation_factor)
     print(training_dataset.numbs_count, training_dataset.caracts_count)
     print("Обучающий датасет создан.")
 
     autoencoder = Autoencoder(caracts_count=training_dataset.caracts_count, seed_kernel_init=seed,
                               batch_size=batch_size, windows_size=windows_size,
                               count_hidden_layers=count_hidden_layers)
-    autoencoder.compile(optimizer="adam")
+    initial_learning_rate = 0.1
+    lr_schedule = keras.optimizers.schedules.ExponentialDecay(
+        initial_learning_rate,
+        decay_steps=2000,
+        decay_rate=0.96,
+        staircase=True)
 
+    optimizer = keras.optimizers.Adam(learning_rate=lr_schedule)
+
+    autoencoder.compile(optimizer=optimizer)
     print("Автоэнкодер определён.")
 
     print("Начинаем обучение:")
-    autoencoder.education(training_dataset, epochs=epochs, shuffle=True)
+    autoencoder.education(training_dataset, epochs=epochs, shuffle=True, model_chekname=model_name)
     autoencoder.build((batch_size, windows_size, training_dataset.caracts_count))
     autoencoder.summary()
     autoencoder.encoder.summary()
@@ -219,7 +271,7 @@ def main():
     autoencoder.decoder.summary()
     autoencoder.save(model_name)
 
-    pd.DataFrame(autoencoder.history_loss).to_csv("History_train_VNAT_video_1.csv", index=False)
+    pd.DataFrame(autoencoder.history_loss).to_csv(history_name, index=False)
 
 
 if __name__ == '__main__':
