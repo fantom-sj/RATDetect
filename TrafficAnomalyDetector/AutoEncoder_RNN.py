@@ -79,6 +79,7 @@ class Autoencoder(Model):
         self.valid_loss_tracker = keras.metrics.Mean(name="valid_loss")
         self.mae_metric = keras.metrics.MeanAbsoluteError(name="mae")
         self.history_loss = {"epoch": [], "step": [], "loss": [], "mean_loss": [], "mae": []}
+        self.history_valid = {"epoch": [], "loss": [], "mean_loss": []}
 
     def train_step(self, x_batch_train):
         with tf.GradientTape() as tape:
@@ -136,19 +137,28 @@ class Autoencoder(Model):
             progress_bar_valid = Progbar(round(training_dataset.valid_count / self.batch_size) - 1,
                                          stateful_metrics=valid_metrics_name)
 
+
             for valid_batch_x in training_dataset.get_valid_item():
                 val_logits = self.__call__(valid_batch_x)
                 valid_loss_value = keras.losses.kl_divergence(valid_batch_x, val_logits)
 
                 valid_loss = float(np.mean(np.array(valid_loss_value)[0]))
                 self.valid_loss_tracker.update_state(valid_loss_value)
+                valid_loss_tracker_res = float(self.valid_loss_tracker.result())
 
                 values = [("Расхождение", valid_loss),
-                          ("Средние расхождение", (float(self.valid_loss_tracker.result())))]
+                          ("Средние расхождение", valid_loss_tracker_res)]
+
+                # Пишем лог после прохождения каждого батча
+                self.history_valid["epoch"].append(epoch)
+                self.history_valid["loss"].append(loss)
+                self.history_valid["mean_loss"].append(valid_loss_tracker_res)
 
                 progress_bar_valid.add(1, values=values)
 
-            self.save(model_chekname+"_e"+str(epoch+1))
+            if (epoch+1) != epochs:
+                self.save(model_chekname+"_e"+str(epoch+1))
+
             if shuffle:
                 training_dataset.on_epoch_end()
         print("Обучение завершено!\n")
@@ -229,15 +239,18 @@ class TrainingDatasetGen(keras.utils.Sequence):
 
 def main():
     batch_size          = 1000
-    count_hidden_layers = 2
+    count_hidden_layers = 7
     validation_factor   = 0.15
     windows_size        = 1000
-    epochs              = 2
+    epochs              = 10
+    init_learning_rate  = 0.1
+    decay_steps         = 1500
     seed = random.randint(3654756461, 9834548734)
     model_name          = "model_GRU_traffic_h7"
     max_min_file        = "MaM_traffic.csv"
     path                = "C:\\Users\\Admin\\SnHome\\P2\\characts_06.csv"
     history_name        = "History_train_traffic_1.csv"
+    history_valid_name  = "History_valid_traffic_1.csv"
 
     data = pd.read_csv(path)
     data = data.drop(["Time_Stamp"], axis=1)
@@ -250,10 +263,10 @@ def main():
     autoencoder = Autoencoder(caracts_count=training_dataset.caracts_count, seed_kernel_init=seed,
                               batch_size=batch_size, windows_size=windows_size,
                               count_hidden_layers=count_hidden_layers)
-    initial_learning_rate = 0.1
+
     lr_schedule = keras.optimizers.schedules.ExponentialDecay(
-        initial_learning_rate,
-        decay_steps=2000,
+        init_learning_rate,
+        decay_steps=decay_steps,
         decay_rate=0.96,
         staircase=True)
 
@@ -272,7 +285,7 @@ def main():
     autoencoder.save(model_name)
 
     pd.DataFrame(autoencoder.history_loss).to_csv(history_name, index=False)
-
+    pd.DataFrame(autoencoder.history_valid).to_csv(history_valid_name, index=False)
 
 if __name__ == '__main__':
     # print(device_lib.list_local_devices())
