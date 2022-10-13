@@ -64,7 +64,7 @@ def ParsePcapng(file_name):
         набору BASE_CHARACTERISTIC, для дальнейшей обработки
 
         Принимает:
-            file_name - имя pcapng без его расширения (до точки)
+            file_name - имя pcap или pcapng файла
         Генерирует:
             paket - набор характеристик каждого прочитанного пакета
     """

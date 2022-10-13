@@ -156,6 +156,8 @@ class Autoencoder(Model):
 
                 progress_bar_valid.add(1, values=values)
 
+            self.valid_loss_tracker.reset_states()
+
             if (epoch+1) != epochs:
                 self.save(model_chekname+"_e"+str(epoch+1))
 
@@ -238,21 +240,29 @@ class TrainingDatasetGen(keras.utils.Sequence):
 
 
 def main():
+    # Параметры датасета
     batch_size          = 1000
-    count_hidden_layers = 7
     validation_factor   = 0.15
     windows_size        = 1000
-    epochs              = 10
+
+    # Параметры оптимизатора
     init_learning_rate  = 0.1
     decay_steps         = 1500
-    seed = random.randint(3654756461, 9834548734)
+    decay_rate          = 0.96
+    staircase           = True
+
+    # Параметры нейронной сети
+    count_hidden_layers = 7
+    epochs              = 10
+    seed                = random.randint(3654756461, 9834548734)
+    shuffle             = True
     model_name          = "model_GRU_traffic_h7"
-    max_min_file        = "MaM_traffic.csv"
-    path                = "C:\\Users\\Admin\\SnHome\\P2\\characts_06.csv"
+    max_min_file        = "M&M_traffic.csv"
+    dataset             = "C:\\Users\\Admin\\SnHome\\P2\\characts_06.csv"
     history_name        = "History_train_traffic_1.csv"
     history_valid_name  = "History_valid_traffic_1.csv"
 
-    data = pd.read_csv(path)
+    data = pd.read_csv(dataset)
     data = data.drop(["Time_Stamp"], axis=1)
     print("Загрузка датасета завершена.")
 
@@ -267,8 +277,8 @@ def main():
     lr_schedule = keras.optimizers.schedules.ExponentialDecay(
         init_learning_rate,
         decay_steps=decay_steps,
-        decay_rate=0.96,
-        staircase=True)
+        decay_rate=decay_rate,
+        staircase=staircase)
 
     optimizer = keras.optimizers.Adam(learning_rate=lr_schedule)
 
@@ -276,7 +286,7 @@ def main():
     print("Автоэнкодер определён.")
 
     print("Начинаем обучение:")
-    autoencoder.education(training_dataset, epochs=epochs, shuffle=True, model_chekname=model_name)
+    autoencoder.education(training_dataset, epochs=epochs, shuffle=shuffle, model_chekname=model_name)
     autoencoder.build((batch_size, windows_size, training_dataset.caracts_count))
     autoencoder.summary()
     autoencoder.encoder.summary()
