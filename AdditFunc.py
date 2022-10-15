@@ -36,21 +36,24 @@ def merge_csv(path, csv_file_arr):
         temp_pandas = pd.read_csv(file)
         csv_all = pd.concat([csv_all, temp_pandas], ignore_index=False)
 
-    csv_all.to_csv(path + "itog_video.csv", index=False)
+    csv_all.to_csv(path, index=False)
 
 
 def main():
-    path = Path("F:\\VNAT\\temp")
-    file_arr = []
-    for file in path.iterdir():
-        file = str(file)
-        if (".csv" in file and "nonvpn" in file) and \
-                ("netflix" in file or "vimeo" in file or "youtube" in file):
-            file_arr.append(str(file))
-            print(str(file))
+    # path = Path("F:\\VNAT\\temp")
+    # file_arr = []
+    # for file in path.iterdir():
+    #     file = str(file)
+    #     if ".csv" in file and "nonvpn" in file:
+    #         file_arr.append(str(file))
+    #         print(str(file))
+    #
+    # merge_csv(str(path) + "\\VNAT_nonvpn.csv", file_arr)
 
-    merge_csv(str(path), file_arr)
-
+    merge_csv("F:\\VNAT\\VNAT_nonvpn_and_characts_06.csv", [
+        "F:\\VNAT\\VNAT_nonvpn.csv",
+        "C:\\Users\\Admin\\SnHome\\P2\\characts_06.csv"
+    ])
 
 if __name__ == '__main__':
     main()

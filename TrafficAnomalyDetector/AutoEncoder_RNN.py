@@ -6,12 +6,13 @@
 import tensorflow as tf
 from tensorflow import keras
 from keras import Model, Sequential
-from keras.layers import GRU
+from keras.layers import GRU, Reshape
 from keras.utils import Progbar
 
 import pandas as pd
 import numpy as np
 import random
+import pylab
 
 from tensorflow.python.client import device_lib
 
@@ -23,7 +24,7 @@ class Autoencoder(Model):
         и как происходит обратное распространение ошибки для обучения.
     """
 
-    def __init__(self, caracts_count=None, seed_kernel_init=231654789,
+    def __init__(self, caracts_count:int, arhiteche:list, seed_kernel_init=231654789,
                  batch_size=1, windows_size=1000, count_hidden_layers=1):
         super(Autoencoder, self).__init__()
         self.batch_size = batch_size
@@ -32,59 +33,67 @@ class Autoencoder(Model):
         self.seed_kernel_init = seed_kernel_init
         self.count_hidden_layers = count_hidden_layers
 
-        self.encoder = Sequential(name="Encoder")
-        self.middle = Sequential(name="Middle")
-        self.decoder = Sequential(name="Decoder")
+        self.encoder   = Sequential(name="Encoder")
+        self.middle    = Sequential(name="Middle")
+        self.decoder   = Sequential(name="Decoder")
 
+        if (count_hidden_layers * 2) != (len(arhiteche) - 1):
+            print("Неверно задана архитектура нейронной сети!")
+            exit(-1)
+
+        arhiteche.append(self.caracts_count)
         index = 0
-        for i in range(0, self.count_hidden_layers * (-1), -1):
+        for i in range(count_hidden_layers):
             self.encoder.add(
                 GRU(
-                    units=self.caracts_count + i,
+                    units=arhiteche[index],
                     activation="tanh",
                     kernel_initializer=keras.initializers.he_uniform(self.seed_kernel_init),
                     return_sequences=True,
-                    name="enc_hid_layer_" + str(index),
-                    input_shape=(self.windows_size, self.caracts_count + i)
+                    name="enc_hid_layer_" + str(i),
+                    input_shape=(self.windows_size, arhiteche[index])
                 )
             )
             index += 1
 
         self.middle.add(
             GRU(
-                units=self.caracts_count - index,
+                units=arhiteche[index],
                 activation="tanh",
                 kernel_initializer=keras.initializers.he_uniform(self.seed_kernel_init),
                 return_sequences=True,
                 name="mid_hid_layer",
-                input_shape=(self.windows_size, self.caracts_count - index + 1)
+                input_shape=(self.windows_size, arhiteche[index])
             )
         )
+        index += 1
 
-        index = 0
-        for i in range((self.count_hidden_layers - 1) * (-1), 1, 1):
+        for i in range(count_hidden_layers):
             self.decoder.add(
                 GRU(
-                    units=self.caracts_count + i,
+                    units=arhiteche[index],
                     activation="tanh",
                     kernel_initializer=keras.initializers.he_uniform(self.seed_kernel_init),
                     return_sequences=True,
-                    name="dec_hid_layer_" + str(index),
-                    input_shape=(self.windows_size, self.caracts_count + i - 1)
+                    name="enc_hid_layer_" + str(i),
+                    input_shape=(self.windows_size, arhiteche[index])
                 )
             )
             index += 1
 
         self.loss_tracker = keras.metrics.Mean(name="loss")
-        self.valid_loss_tracker = keras.metrics.Mean(name="valid_loss")
         self.mae_metric = keras.metrics.MeanAbsoluteError(name="mae")
+
+        self.valid_loss_tracker = keras.metrics.Mean(name="valid_loss")
+        self.valid_mae_metric = keras.metrics.MeanAbsoluteError(name="valid_mae")
+
         self.history_loss = {"epoch": [], "step": [], "loss": [], "mean_loss": [], "mae": []}
-        self.history_valid = {"epoch": [], "loss": [], "mean_loss": []}
+        self.history_valid = {"epoch": [], "step": [], "loss": [], "mean_loss": [], "mae": []}
 
     def train_step(self, x_batch_train):
         with tf.GradientTape() as tape:
             logits = self.__call__(x_batch_train)
-            loss_value = keras.losses.kl_divergence(x_batch_train, logits)
+            loss_value = self.loss(x_batch_train, logits)
 
         trainable_vars = self.trainable_variables
         gradients = tape.gradient(loss_value, trainable_vars)
@@ -99,7 +108,8 @@ class Autoencoder(Model):
 
         return loss
 
-    def education(self, training_dataset, epochs=1, shuffle=True, model_chekname="model"):
+    def education(self, training_dataset, epochs=1, shuffle=True,
+                  model_chekname="model", versia="1", path_model=""):
         loss = 0
         metrics_names = ["Расхождение", "Средние расхождение", "Средняя абсолютная ошибка"]
 
@@ -111,10 +121,9 @@ class Autoencoder(Model):
 
             # Итерируем по пакетам в датасете.
             for step, x_batch_train in enumerate(training_dataset):
-                loss = self.train_step(x_batch_train)
-
-                loss_tracker_res = self.loss_tracker.result()
-                mae_metric_res = self.mae_metric.result()
+                loss = self.train_step(x_batch_train) * 100
+                loss_tracker_res = self.loss_tracker.result() * 100
+                mae_metric_res = self.mae_metric.result() * 100
 
                 # Пишем лог после прохождения каждого батча
                 self.history_loss["epoch"].append(epoch)
@@ -137,32 +146,43 @@ class Autoencoder(Model):
             progress_bar_valid = Progbar(round(training_dataset.valid_count / self.batch_size) - 1,
                                          stateful_metrics=valid_metrics_name)
 
-
-            for valid_batch_x in training_dataset.get_valid_item():
+            for step, valid_batch_x in enumerate(training_dataset.get_valid()):
                 val_logits = self.__call__(valid_batch_x)
-                valid_loss_value = keras.losses.kl_divergence(valid_batch_x, val_logits)
+                valid_loss_value = self.loss(valid_batch_x, val_logits)
 
-                valid_loss = float(np.mean(np.array(valid_loss_value)[0]))
                 self.valid_loss_tracker.update_state(valid_loss_value)
-                valid_loss_tracker_res = float(self.valid_loss_tracker.result())
+                self.valid_mae_metric.update_state(valid_batch_x, val_logits)
+
+                valid_loss = float(np.mean(np.array(valid_loss_value)[0])) * 100
+                valid_loss_tracker_res = float(self.valid_loss_tracker.result()) * 100
+                valid_mae_metric_res = float(self.valid_mae_metric.result()) * 100
 
                 values = [("Расхождение", valid_loss),
-                          ("Средние расхождение", valid_loss_tracker_res)]
+                          ("Средние расхождение", valid_loss_tracker_res),
+                          ("Средняя абсолютная ошибка", valid_mae_metric_res)]
 
                 # Пишем лог после прохождения каждого батча
                 self.history_valid["epoch"].append(epoch)
+                self.history_valid["step"].append(step)
                 self.history_valid["loss"].append(loss)
                 self.history_valid["mean_loss"].append(valid_loss_tracker_res)
+                self.history_valid["mae"].append(valid_loss_tracker_res)
 
                 progress_bar_valid.add(1, values=values)
 
             self.valid_loss_tracker.reset_states()
+            self.valid_mae_metric.reset_state()
 
             if (epoch+1) != epochs:
                 self.save(model_chekname+"_e"+str(epoch+1))
+                history_name = path_model + "history_train_e" + str(epoch+1) + "_v" + versia + ".csv"
+                history_valid_name = path_model + "history_valid_e" + str(epoch+1) + "_v" + versia + ".csv"
+                pd.DataFrame(self.history_loss).to_csv(history_name, index=False)
+                pd.DataFrame(self.history_valid).to_csv(history_valid_name, index=False)
 
             if shuffle:
                 training_dataset.on_epoch_end()
+
         print("Обучение завершено!\n")
 
     def call(self, input_features):
@@ -185,7 +205,7 @@ class TrainingDatasetGen(keras.utils.Sequence):
 
     def __init__(self, dataset, max_min_file, batch_size=1000, windows_size=1000, validation_factor=0.2):
         # Нормализуем данные
-        self.dataset = self.normalization(dataset, max_min_file).to_numpy()
+        self.dataset = self.normalization(dataset, max_min_file).to_numpy() # [:50000]
         print("Нормализация данных выполнена.")
 
         self.numbs_count, self.caracts_count = self.dataset.shape
@@ -227,12 +247,15 @@ class TrainingDatasetGen(keras.utils.Sequence):
     def get_valid_len(self):
         return round((self.valid_count - self.windows_size) / self.batch_size)
 
-    def get_valid_item(self):
+    def get_valid(self):
+        valid_arr = []
         len_valid = self.get_valid_len()
         for idx in range(len_valid):
             valid_batch_x = np.array(
                 [self.valid_dataset[idx * self.batch_size:idx * self.batch_size + self.windows_size, :]])
-            yield valid_batch_x
+            valid_arr.append(valid_batch_x)
+
+        return np.array(valid_arr)
 
     def on_epoch_end(self):
         np.random.shuffle(self.training_dataset)
@@ -242,7 +265,7 @@ class TrainingDatasetGen(keras.utils.Sequence):
 def main():
     # Параметры датасета
     batch_size          = 1000
-    validation_factor   = 0.15
+    validation_factor   = 0.05
     windows_size        = 1000
 
     # Параметры оптимизатора
@@ -252,15 +275,19 @@ def main():
     staircase           = True
 
     # Параметры нейронной сети
-    count_hidden_layers = 7
-    epochs              = 10
-    seed                = random.randint(3654756461, 9834548734)
+    count_hidden_layers = 3
+    epochs              = 5
+    seed                = random.randint(1111111111, 9999999999)
     shuffle             = True
-    model_name          = "model_GRU_traffic_h7"
-    max_min_file        = "M&M_traffic.csv"
-    dataset             = "C:\\Users\\Admin\\SnHome\\P2\\characts_06.csv"
-    history_name        = "History_train_traffic_1.csv"
-    history_valid_name  = "History_valid_traffic_1.csv"
+    loss_func           = keras.losses.mse
+    arhiteche           = [17, 17, 17, 17, 17, 17, 17]
+    path_model          = "modeles\\TrafficAnomalyDetector\\"
+    versia              = "0.5"
+    model_name          = path_model + "model_TAD_v" + versia
+    max_min_file        = path_model + "M&M_traffic_VNAT.csv"
+    dataset             = "F:\\VNAT\\VNAT_nonvpn_and_characts_06.csv"
+    history_name        = path_model + "history_train_v" + versia + ".csv"
+    history_valid_name  = path_model + "history_valid_v" + versia + ".csv"
 
     data = pd.read_csv(dataset)
     data = data.drop(["Time_Stamp"], axis=1)
@@ -270,29 +297,44 @@ def main():
     print(training_dataset.numbs_count, training_dataset.caracts_count)
     print("Обучающий датасет создан.")
 
-    autoencoder = Autoencoder(caracts_count=training_dataset.caracts_count, seed_kernel_init=seed,
-                              batch_size=batch_size, windows_size=windows_size,
-                              count_hidden_layers=count_hidden_layers)
+    autoencoder = Autoencoder(training_dataset.caracts_count, arhiteche,
+                              seed_kernel_init=seed, batch_size=batch_size,
+                              windows_size=windows_size, count_hidden_layers=count_hidden_layers)
 
     lr_schedule = keras.optimizers.schedules.ExponentialDecay(
         init_learning_rate,
         decay_steps=decay_steps,
         decay_rate=decay_rate,
-        staircase=staircase)
+        staircase=staircase
+    )
 
     optimizer = keras.optimizers.Adam(learning_rate=lr_schedule)
 
-    autoencoder.compile(optimizer=optimizer)
+    autoencoder.compile(optimizer="adam", loss=loss_func)
     print("Автоэнкодер определён.")
 
     print("Начинаем обучение:")
-    autoencoder.education(training_dataset, epochs=epochs, shuffle=shuffle, model_chekname=model_name)
+    autoencoder.education(training_dataset, epochs=epochs, shuffle=shuffle,
+                          model_chekname=model_name, versia=versia,
+                          path_model=path_model)
     autoencoder.build((batch_size, windows_size, training_dataset.caracts_count))
     autoencoder.summary()
     autoencoder.encoder.summary()
     autoencoder.middle.summary()
     autoencoder.decoder.summary()
     autoencoder.save(model_name)
+
+    pylab.subplot(1, 3, 1)
+    pylab.plot(autoencoder.history_loss["loss"])
+    pylab.title("Расхождение")
+
+    pylab.subplot(1, 3, 1)
+    pylab.plot(autoencoder.history_loss["mean_loss"])
+    pylab.title("Средние расхождение")
+
+    pylab.subplot(1, 3, 1)
+    pylab.plot(autoencoder.history_loss["mae"])
+    pylab.title("Средняя абсолютная ошибка")
 
     pd.DataFrame(autoencoder.history_loss).to_csv(history_name, index=False)
     pd.DataFrame(autoencoder.history_valid).to_csv(history_valid_name, index=False)
