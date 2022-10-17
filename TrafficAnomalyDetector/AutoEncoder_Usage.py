@@ -1,4 +1,5 @@
 from tensorflow import keras
+from keras.utils import Progbar
 from SnifferPaket.TrafficParcNDPI import PreprocessingPcapng
 from pathlib import Path
 from SnifferPaket.characts import CHARACTERISTIC
@@ -59,7 +60,7 @@ def main():
     characts_file = "..\\data\\pcap\\test_dataset\\array_characts.csv"
     windows_size = 1000
 
-    model_name = "modeles\\TrafficAnomalyDetector\\model_TAD_v0.4_e1"
+    model_name = "modeles\\TrafficAnomalyDetector\\model_TAD_v0.7"
 
     caracts_pd = pd.read_csv(characts_file)
     caracts_pd = caracts_pd.drop(["Time_Stamp"], axis=1)
@@ -72,6 +73,10 @@ def main():
     metrics  = {"loss": []}
 
     print("Начало анализа c помощью модели:", model_name)
+    valid_metrics_name = ["Расхождение"]
+    progress_bar = Progbar(round(len(caracts_pd)/windows_size),
+                                 stateful_metrics=valid_metrics_name)
+
     for idx in range(round(len(caracts_pd)/windows_size)):
         batch_x = np.array([caracts_pd[idx*windows_size:idx*windows_size + windows_size, :]])
         batch_x_restored = autoencoder_load.predict(batch_x, verbose=0)
@@ -79,6 +84,8 @@ def main():
         loss = keras.losses.mean_squared_error(batch_x, batch_x_restored)
         loss = np.mean(np.array(loss)[0]) * 100
         metrics["loss"].append(loss)
+        values = [("Расхождение", loss)]
+        progress_bar.add(1, values=values)
 
     pylab.subplot(1, 1, 1)
     pylab.plot(metrics["loss"])

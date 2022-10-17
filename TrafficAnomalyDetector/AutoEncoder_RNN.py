@@ -116,7 +116,7 @@ class Autoencoder(Model):
         for epoch in range(epochs):
             print("Эпоха {}/{}".format(epoch+1, epochs))
 
-            progress_bar = Progbar(round(training_dataset.numbs_count / self.batch_size)-1,
+            progress_bar = Progbar(round(training_dataset.numbs_count / (self.batch_size * self.windows_size))-1,
                                    stateful_metrics=metrics_names)
 
             # Итерируем по пакетам в датасете.
@@ -180,8 +180,7 @@ class Autoencoder(Model):
                 pd.DataFrame(self.history_loss).to_csv(history_name, index=False)
                 pd.DataFrame(self.history_valid).to_csv(history_valid_name, index=False)
 
-            if shuffle:
-                training_dataset.on_epoch_end()
+            training_dataset.on_epoch_end(shuffle)
 
         print("Обучение завершено!\n")
 
@@ -205,7 +204,7 @@ class TrainingDatasetGen(keras.utils.Sequence):
 
     def __init__(self, dataset, max_min_file, batch_size=1000, windows_size=1000, validation_factor=0.2):
         # Нормализуем данные
-        self.dataset = self.normalization(dataset, max_min_file).to_numpy() # [:50000]
+        self.dataset = self.normalization(dataset, max_min_file).to_numpy() # [:500000]
         print("Нормализация данных выполнена.")
 
         self.numbs_count, self.caracts_count = self.dataset.shape
@@ -214,12 +213,17 @@ class TrainingDatasetGen(keras.utils.Sequence):
         self.batch_size = batch_size
 
         # Получаем размеры тренировочной и валидационной выборки
-        self.valid_count = round(self.numbs_count * validation_factor / batch_size) * batch_size
-        self.numbs_count = round(len(self.dataset) / batch_size) * batch_size - self.valid_count
+        self.valid_count = round(self.numbs_count * validation_factor / (batch_size * windows_size)) * \
+                           (batch_size * windows_size)
+        self.numbs_count = round(len(self.dataset) / (batch_size * windows_size)) * \
+                           (batch_size * windows_size) - self.valid_count
 
         # Создаём тренировочную и валидационную выборку
         self.training_dataset = self.dataset[:self.numbs_count]
-        self.valid_dataset    = self.dataset[self.numbs_count:round(len(self.dataset) / batch_size) * batch_size]
+        self.valid_dataset    = self.dataset[self.numbs_count:round(len(self.dataset) / (batch_size * windows_size)) *
+                                                              (batch_size * windows_size)]
+        self.index_value = 0
+        self.index_valid = 0
 
     @staticmethod
     def normalization(pd_data, max_min_file):
@@ -238,10 +242,17 @@ class TrainingDatasetGen(keras.utils.Sequence):
         return pd_data
 
     def __len__(self):
-        return round((self.numbs_count - self.windows_size) / self.batch_size)
+        return round(self.numbs_count / (self.batch_size * self.windows_size))
 
     def __getitem__(self, idx):
-        batch_x = np.array([self.training_dataset[idx * self.batch_size:idx * self.batch_size + self.windows_size, :]])
+        batch_x = []
+        for i in range(self.batch_size):
+            batch_x.append(self.training_dataset[idx * self.batch_size:idx * self.batch_size + self.windows_size, :])
+            self.index_value += self.windows_size
+        batch_x = np.array(batch_x)
+        # batch_x = np.array([self.training_dataset[idx * self.batch_size:idx * self.batch_size + self.windows_size, :]])
+        # print(batch_x.shape)
+        print(batch_x.shape)
         return batch_x
 
     def get_valid_len(self):
@@ -251,22 +262,26 @@ class TrainingDatasetGen(keras.utils.Sequence):
         valid_arr = []
         len_valid = self.get_valid_len()
         for idx in range(len_valid):
-            valid_batch_x = np.array(
-                [self.valid_dataset[idx * self.batch_size:idx * self.batch_size + self.windows_size, :]])
+            valid_batch_x = self.valid_dataset[self.index_valid:self.index_valid+self.windows_size]
             valid_arr.append(valid_batch_x)
+            self.index_valid += self.windows_size
 
         return np.array(valid_arr)
 
-    def on_epoch_end(self):
-        np.random.shuffle(self.training_dataset)
-        np.random.shuffle(self.valid_dataset)
+    def on_epoch_end(self, shuffle):
+        if shuffle:
+            np.random.shuffle(self.training_dataset)
+            np.random.shuffle(self.valid_dataset)
+
+        self.index_value = 0
+        self.index_valid = 0
 
 
 def main():
     # Параметры датасета
-    batch_size          = 1000
+    batch_size          = 100
     validation_factor   = 0.05
-    windows_size        = 1000
+    windows_size        = 100
 
     # Параметры оптимизатора
     init_learning_rate  = 0.1
@@ -276,13 +291,13 @@ def main():
 
     # Параметры нейронной сети
     count_hidden_layers = 3
-    epochs              = 5
+    epochs              = 2
     seed                = random.randint(1111111111, 9999999999)
-    shuffle             = True
+    shuffle             = False
     loss_func           = keras.losses.mse
     arhiteche           = [17, 17, 17, 17, 17, 17, 17]
     path_model          = "modeles\\TrafficAnomalyDetector\\"
-    versia              = "0.5"
+    versia              = "0.8"
     model_name          = path_model + "model_TAD_v" + versia
     max_min_file        = path_model + "M&M_traffic_VNAT.csv"
     dataset             = "F:\\VNAT\\VNAT_nonvpn_and_characts_06.csv"
@@ -296,6 +311,9 @@ def main():
     training_dataset = TrainingDatasetGen(data, max_min_file, batch_size, windows_size, validation_factor)
     print(training_dataset.numbs_count, training_dataset.caracts_count)
     print("Обучающий датасет создан.")
+
+
+    print()
 
     autoencoder = Autoencoder(training_dataset.caracts_count, arhiteche,
                               seed_kernel_init=seed, batch_size=batch_size,
@@ -338,6 +356,7 @@ def main():
 
     pd.DataFrame(autoencoder.history_loss).to_csv(history_name, index=False)
     pd.DataFrame(autoencoder.history_valid).to_csv(history_valid_name, index=False)
+
 
 if __name__ == '__main__':
     # print(device_lib.list_local_devices())
