@@ -196,7 +196,7 @@ class TrainingDatasetGen(keras.utils.Sequence):
 
     def __init__(self, dataset, max_min_file, batch_size=1000, windows_size=1000, validation_factor=0.2):
         # Нормализуем данные
-        self.dataset = self.normalization(dataset, max_min_file).to_numpy() [:5000]
+        self.dataset = self.normalization(dataset, max_min_file).to_numpy() # [:5000]
         print("Нормализация данных выполнена.")
 
         self.numbs_count, self.caracts_count = self.dataset.shape
@@ -257,7 +257,7 @@ class TrainingDatasetGen(keras.utils.Sequence):
 def main():
     # Параметры датасета
     batch_size          = 500
-    validation_factor   = 0.1
+    validation_factor   = 0.05
     windows_size        = 500
 
     # Параметры оптимизатора
@@ -268,12 +268,12 @@ def main():
 
     # Параметры нейронной сети
     count_hidden_layers = 3
-    epochs              = 5
+    epochs              = 2
     shuffle             = True
     loss_func           = keras.losses.mse
-    path_model          = "modeles\\TrafficAnomalyDetector\\"
-    versia              = "0.9_synch"
-    model_name          = path_model + "model_TAD_v" + versia
+    path_model          = "modeles\\SunchronTrafficAnomalyDetector\\"
+    versia              = "0.1"
+    model_name          = path_model + "model_STAD_v" + versia
     max_min_file        = path_model + "M&M_traffic_VNAT.csv"
     dataset             = "F:\\VNAT\\VNAT_nonvpn_and_characts_06.csv"
     history_name        = path_model + "history_train_v" + versia + ".csv"
@@ -345,11 +345,11 @@ if __name__ == '__main__':
     # autoencoder = SynchronAutoencoder(caracts_count, batch_size, windows_size, 1)
     # y = autoencoder(x)
     # print(y)
+
     gpu_devices = tf.config.experimental.list_physical_devices("GPU")
     for device in gpu_devices:
         tf.config.experimental.set_memory_growth(device, True)
-        tf.config.experimental.set_virtual_device_configuration(device, [
-            tf.config.experimental.VirtualDeviceConfiguration(memory_limit=6000)])
-    import tensorflow as tf
+    tf.config.experimental.set_virtual_device_configuration(gpu_devices[0], [
+        tf.config.experimental.VirtualDeviceConfiguration(memory_limit=6000)])
 
     main()
