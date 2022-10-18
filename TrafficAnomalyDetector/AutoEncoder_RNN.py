@@ -48,7 +48,7 @@ class Autoencoder(Model):
                 GRU(
                     units=arhiteche[index],
                     activation="tanh",
-                    kernel_initializer=keras.initializers.he_uniform(self.seed_kernel_init),
+                    # kernel_initializer=keras.initializers.he_uniform(self.seed_kernel_init),
                     return_sequences=True,
                     name="enc_hid_layer_" + str(i),
                     input_shape=(self.windows_size, arhiteche[index])
@@ -60,7 +60,7 @@ class Autoencoder(Model):
             GRU(
                 units=arhiteche[index],
                 activation="tanh",
-                kernel_initializer=keras.initializers.he_uniform(self.seed_kernel_init),
+                # kernel_initializer=keras.initializers.he_uniform(self.seed_kernel_init),
                 return_sequences=True,
                 name="mid_hid_layer",
                 input_shape=(self.windows_size, arhiteche[index])
@@ -73,7 +73,7 @@ class Autoencoder(Model):
                 GRU(
                     units=arhiteche[index],
                     activation="tanh",
-                    kernel_initializer=keras.initializers.he_uniform(self.seed_kernel_init),
+                    # kernel_initializer=keras.initializers.he_uniform(self.seed_kernel_init),
                     return_sequences=True,
                     name="enc_hid_layer_" + str(i),
                     input_shape=(self.windows_size, arhiteche[index])
@@ -116,7 +116,7 @@ class Autoencoder(Model):
         for epoch in range(epochs):
             print("Эпоха {}/{}".format(epoch+1, epochs))
 
-            progress_bar = Progbar(round(training_dataset.numbs_count / (self.batch_size * self.windows_size))-1,
+            progress_bar = Progbar(len(training_dataset),
                                    stateful_metrics=metrics_names)
 
             # Итерируем по пакетам в датасете.
@@ -143,35 +143,38 @@ class Autoencoder(Model):
 
             valid_metrics_name = ["Расхождение", "Средние расхождение"]
             print("Валидация после эпохи {}".format(epoch+1))
-            progress_bar_valid = Progbar(round(training_dataset.valid_count / self.batch_size) - 1,
+            progress_bar_valid = Progbar(round(training_dataset.valid_count / self.batch_size),
                                          stateful_metrics=valid_metrics_name)
 
-            for step, valid_batch_x in enumerate(training_dataset.get_valid()):
-                val_logits = self.__call__(valid_batch_x)
-                valid_loss_value = self.loss(valid_batch_x, val_logits)
+            try:
+                for step, valid_batch_x in enumerate(training_dataset.get_valid()):
+                    val_logits = self.__call__(valid_batch_x)
+                    valid_loss_value = self.loss(valid_batch_x, val_logits)
 
-                self.valid_loss_tracker.update_state(valid_loss_value)
-                self.valid_mae_metric.update_state(valid_batch_x, val_logits)
+                    self.valid_loss_tracker.update_state(valid_loss_value)
+                    self.valid_mae_metric.update_state(valid_batch_x, val_logits)
 
-                valid_loss = float(np.mean(np.array(valid_loss_value)[0])) * 100
-                valid_loss_tracker_res = float(self.valid_loss_tracker.result()) * 100
-                valid_mae_metric_res = float(self.valid_mae_metric.result()) * 100
+                    valid_loss = float(np.mean(np.array(valid_loss_value)[0])) * 100
+                    valid_loss_tracker_res = float(self.valid_loss_tracker.result()) * 100
+                    valid_mae_metric_res = float(self.valid_mae_metric.result()) * 100
 
-                values = [("Расхождение", valid_loss),
-                          ("Средние расхождение", valid_loss_tracker_res),
-                          ("Средняя абсолютная ошибка", valid_mae_metric_res)]
+                    values = [("Расхождение", valid_loss),
+                              ("Средние расхождение", valid_loss_tracker_res),
+                              ("Средняя абсолютная ошибка", valid_mae_metric_res)]
 
-                # Пишем лог после прохождения каждого батча
-                self.history_valid["epoch"].append(epoch)
-                self.history_valid["step"].append(step)
-                self.history_valid["loss"].append(loss)
-                self.history_valid["mean_loss"].append(valid_loss_tracker_res)
-                self.history_valid["mae"].append(valid_loss_tracker_res)
+                    # Пишем лог после прохождения каждого батча
+                    self.history_valid["epoch"].append(epoch)
+                    self.history_valid["step"].append(step)
+                    self.history_valid["loss"].append(loss)
+                    self.history_valid["mean_loss"].append(valid_loss_tracker_res)
+                    self.history_valid["mae"].append(valid_loss_tracker_res)
 
-                progress_bar_valid.add(1, values=values)
+                    progress_bar_valid.add(1, values=values)
 
-            self.valid_loss_tracker.reset_states()
-            self.valid_mae_metric.reset_state()
+                self.valid_loss_tracker.reset_states()
+                self.valid_mae_metric.reset_state()
+            except:
+                print("Ошибка при валидации!")
 
             if (epoch+1) != epochs:
                 self.save(model_chekname+"_e"+str(epoch+1))
@@ -180,7 +183,8 @@ class Autoencoder(Model):
                 pd.DataFrame(self.history_loss).to_csv(history_name, index=False)
                 pd.DataFrame(self.history_valid).to_csv(history_valid_name, index=False)
 
-            training_dataset.on_epoch_end(shuffle)
+            if shuffle:
+                training_dataset.on_epoch_end()
 
         print("Обучение завершено!\n")
 
@@ -204,7 +208,7 @@ class TrainingDatasetGen(keras.utils.Sequence):
 
     def __init__(self, dataset, max_min_file, batch_size=1000, windows_size=1000, validation_factor=0.2):
         # Нормализуем данные
-        self.dataset = self.normalization(dataset, max_min_file).to_numpy() # [:500000]
+        self.dataset = self.normalization(dataset, max_min_file).to_numpy() #[:50000]
         print("Нормализация данных выполнена.")
 
         self.numbs_count, self.caracts_count = self.dataset.shape
@@ -213,17 +217,12 @@ class TrainingDatasetGen(keras.utils.Sequence):
         self.batch_size = batch_size
 
         # Получаем размеры тренировочной и валидационной выборки
-        self.valid_count = round(self.numbs_count * validation_factor / (batch_size * windows_size)) * \
-                           (batch_size * windows_size)
-        self.numbs_count = round(len(self.dataset) / (batch_size * windows_size)) * \
-                           (batch_size * windows_size) - self.valid_count
+        self.valid_count = round(self.numbs_count * validation_factor / batch_size) * batch_size
+        self.numbs_count = round(len(self.dataset) / batch_size) * batch_size - self.valid_count
 
         # Создаём тренировочную и валидационную выборку
         self.training_dataset = self.dataset[:self.numbs_count]
-        self.valid_dataset    = self.dataset[self.numbs_count:round(len(self.dataset) / (batch_size * windows_size)) *
-                                                              (batch_size * windows_size)]
-        self.index_value = 0
-        self.index_valid = 0
+        self.valid_dataset    = self.dataset[self.numbs_count:round(len(self.dataset) / batch_size) * batch_size]
 
     @staticmethod
     def normalization(pd_data, max_min_file):
@@ -242,17 +241,25 @@ class TrainingDatasetGen(keras.utils.Sequence):
         return pd_data
 
     def __len__(self):
-        return round(self.numbs_count / (self.batch_size * self.windows_size))
+        return round((self.numbs_count - self.windows_size) / self.batch_size)-2
 
     def __getitem__(self, idx):
         batch_x = []
-        for i in range(self.batch_size):
-            batch_x.append(self.training_dataset[idx * self.batch_size:idx * self.batch_size + self.windows_size, :])
-            self.index_value += self.windows_size
+        for index in range(self.batch_size):
+            batch_x.append(
+                self.training_dataset[idx * self.batch_size + index:idx * self.batch_size + index + self.windows_size, :]
+            )
         batch_x = np.array(batch_x)
         # batch_x = np.array([self.training_dataset[idx * self.batch_size:idx * self.batch_size + self.windows_size, :]])
-        # print(batch_x.shape)
-        print(batch_x.shape)
+        try:
+            x, y, z = batch_x.shape
+        except ValueError:
+            print("Ошибка при создании batch_x, его размерность не является 3х мерной! Размерность:", batch_x.shape)
+            print("Был возвращён батч с нулевыми значениями размерности.")
+            batch_x = [[[]]]
+            batch_x = np.array(batch_x)
+            print(batch_x.shape)
+            return batch_x
         return batch_x
 
     def get_valid_len(self):
@@ -262,24 +269,20 @@ class TrainingDatasetGen(keras.utils.Sequence):
         valid_arr = []
         len_valid = self.get_valid_len()
         for idx in range(len_valid):
-            valid_batch_x = self.valid_dataset[self.index_valid:self.index_valid+self.windows_size]
+            valid_batch_x = np.array(
+                [self.valid_dataset[idx * self.batch_size:idx * self.batch_size + self.windows_size, :]])
             valid_arr.append(valid_batch_x)
-            self.index_valid += self.windows_size
 
         return np.array(valid_arr)
 
-    def on_epoch_end(self, shuffle):
-        if shuffle:
-            np.random.shuffle(self.training_dataset)
-            np.random.shuffle(self.valid_dataset)
-
-        self.index_value = 0
-        self.index_valid = 0
+    def on_epoch_end(self):
+        np.random.shuffle(self.training_dataset)
+        np.random.shuffle(self.valid_dataset)
 
 
 def main():
     # Параметры датасета
-    batch_size          = 100
+    batch_size          = 1000
     validation_factor   = 0.05
     windows_size        = 100
 
@@ -311,9 +314,6 @@ def main():
     training_dataset = TrainingDatasetGen(data, max_min_file, batch_size, windows_size, validation_factor)
     print(training_dataset.numbs_count, training_dataset.caracts_count)
     print("Обучающий датасет создан.")
-
-
-    print()
 
     autoencoder = Autoencoder(training_dataset.caracts_count, arhiteche,
                               seed_kernel_init=seed, batch_size=batch_size,
@@ -356,7 +356,6 @@ def main():
 
     pd.DataFrame(autoencoder.history_loss).to_csv(history_name, index=False)
     pd.DataFrame(autoencoder.history_valid).to_csv(history_valid_name, index=False)
-
 
 if __name__ == '__main__':
     # print(device_lib.list_local_devices())

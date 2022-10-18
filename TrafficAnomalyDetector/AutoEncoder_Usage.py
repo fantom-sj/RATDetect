@@ -58,9 +58,9 @@ def main():
     modeles = "modeles\\model_GRU_traffic\\Checkpoints"
     max_min_file = "modeles\\TrafficAnomalyDetector\\M&M_traffic_VNAT.csv"
     characts_file = "..\\data\\pcap\\test_dataset\\array_characts.csv"
-    windows_size = 1000
+    windows_size = 100
 
-    model_name = "modeles\\TrafficAnomalyDetector\\model_TAD_v0.7"
+    model_name = "modeles\\TrafficAnomalyDetector\\model_TAD_v0.8"
 
     caracts_pd = pd.read_csv(characts_file)
     caracts_pd = caracts_pd.drop(["Time_Stamp"], axis=1)
