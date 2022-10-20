@@ -56,11 +56,11 @@ def normalization(pd_data, max_min_pd):
 
 
 def main():
-    max_min_file = "modeles\\TrafficAnomalyDetector\\M&M_traffic_VNAT.csv"
+    max_min_file = "modeles\\SunchronTrafficAnomalyDetector\\M&M_traffic_VNAT.csv"
     characts_file = "..\\data\\pcap\\test_dataset\\array_characts.csv"
     windows_size = 500
 
-    model_name = "modeles\\SunchronTrafficAnomalyDetector\\model_TAD_v0.1_e1"
+    model_name = "modeles\\SunchronTrafficAnomalyDetector\\model_STAD_v0.1_e1"
 
     caracts_pd = pd.read_csv(characts_file)
     caracts_pd = caracts_pd.drop(["Time_Stamp"], axis=1)

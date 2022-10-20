@@ -5,52 +5,34 @@
 
 import tensorflow as tf
 from tensorflow import keras
-from keras import Model, Sequential
-from keras.layers import GRU, Layer, GRUCell
+from keras import Model
+from keras.layers import Layer, GRUCell, StackedRNNCells, RNN
 from keras.utils import Progbar
+from sklearn import preprocessing
 
 import pandas as pd
 import numpy as np
-import random
 import pylab
 
 from tensorflow.python.client import device_lib
 
 
 class SynchronGRU(Layer):
-    def __init__(self, windows_size: int, caracts_count: int):
+    def __init__(self, windows_size: int, caracts_count: int, return_sequences=True):
         super(SynchronGRU, self).__init__()
         self.windows_size = windows_size
         self.caracts_count = caracts_count
 
-        self.cells = [GRU(self.windows_size, activation="tanh", name="Layer1", input_shape=(self.windows_size, 1))]
-        for i in range(1, self.caracts_count, 1):
-            self.cells.append(
-                GRU(self.windows_size, activation="tanh", name="Layer"+str(i+1), input_shape=(self.windows_size, 2))
-            )
+        self.cells = [GRUCell(self.windows_size) for _ in range(self.caracts_count)]
+        self.rnn_cells = StackedRNNCells(cells=self.cells)
+        self.rnn_layer = RNN(cell=self.rnn_cells, return_sequences=return_sequences,
+                             return_state=True, stateful=False, unroll=True)
 
-        self.y_features = []
+    def call(self, input_features: tf.Tensor, initial_state: list):
+        if initial_state is None:
+            initial_state = [tf.zeros(shape=(1, self.windows_size), dtype=tf.float32) for _ in range(self.caracts_count)]
 
-    def call(self, input_features: tf.Tensor):
-        arr_x_in_windows = []
-        for idx in range(self.caracts_count):
-            x = tf.gather(input_features, idx, axis=2)
-            arr_x_in_windows.append(x)
-
-        y_arr = []
-        tensor = tf.reshape(arr_x_in_windows[0], (1, self.windows_size, 1))
-        y_arr.append(self.cells[0](tensor))
-
-        for i in range(1, self.caracts_count, 1):
-            tensor = tf.concat([arr_x_in_windows[1], y_arr[i-1]], 0)
-            tensor = tf.reshape(tensor, (1, 2, self.windows_size))
-            y_arr.append(self.cells[i](tensor))
-
-        y_res = y_arr[0]
-        for i in range(1, self.caracts_count, 1):
-            y_res = tf.concat([y_res, y_arr[i]], 0)
-
-        y_res = tf.reshape(y_res, (1, self.windows_size, self.caracts_count))
+        y_res = self.rnn_layer(input_features, initial_state=initial_state)
         return y_res
 
 
@@ -68,9 +50,7 @@ class SynchronAutoencoder(Model):
         self.caracts_count = caracts_count
         self.count_hidden_layers = count_hidden_layers
 
-        self.L1  = SynchronGRU(self.windows_size, self.caracts_count)
-        self.L2  = SynchronGRU(self.windows_size, self.caracts_count)
-        self.L3  = SynchronGRU(self.windows_size, self.caracts_count)
+        self.Layers = [SynchronGRU(self.windows_size, self.caracts_count) for _ in range(count_hidden_layers)]
 
         self.loss_tracker = keras.metrics.Mean(name="loss")
         self.mae_metric = keras.metrics.MeanAbsoluteError(name="mae")
@@ -80,6 +60,8 @@ class SynchronAutoencoder(Model):
 
         self.history_loss = {"epoch": [], "step": [], "loss": [], "mean_loss": [], "mae": []}
         self.history_valid = {"epoch": [], "step": [], "loss": [], "mean_loss": [], "mae": []}
+
+        self.initial_state = [tf.zeros(shape=(1, self.windows_size), dtype=tf.float32) for _ in range(self.caracts_count)]
 
     def train_step(self, x_batch_train):
         with tf.GradientTape() as tape:
@@ -113,6 +95,7 @@ class SynchronAutoencoder(Model):
             # Итерируем по пакетам в датасете.
             for step, x_batch_train in enumerate(training_dataset):
                 loss = self.train_step(x_batch_train) * 100
+
                 loss_tracker_res = self.loss_tracker.result() * 100
                 mae_metric_res = self.mae_metric.result() * 100
 
@@ -177,10 +160,13 @@ class SynchronAutoencoder(Model):
         print("Обучение завершено!\n")
 
     def call(self, input_features):
-        res = self.L1(input_features)
-        res = self.L2(res)
-        res = self.L3(res)
-        return res
+        x = input_features
+        state = None
+        for leyer in self.Layers:
+            res = leyer(x, state)
+            x = res[0]
+            state = res[1:]
+        return x
 
     @property
     def metrics(self):
@@ -194,9 +180,9 @@ class TrainingDatasetGen(keras.utils.Sequence):
         чтобы в дальнейшем передавать по одному батчу в нейронную сеть для очередного шага обучения.
     """
 
-    def __init__(self, dataset, max_min_file, batch_size=1000, windows_size=1000, validation_factor=0.2):
+    def __init__(self, dataset, max_min_file, feature_range, batch_size=1000, windows_size=1000, validation_factor=0.2):
         # Нормализуем данные
-        self.dataset = self.normalization(dataset, max_min_file).to_numpy() # [:5000]
+        self.dataset = self.normalization(dataset, max_min_file, feature_range).to_numpy() # [:1000]
         print("Нормализация данных выполнена.")
 
         self.numbs_count, self.caracts_count = self.dataset.shape
@@ -213,9 +199,10 @@ class TrainingDatasetGen(keras.utils.Sequence):
         self.valid_dataset    = self.dataset[self.numbs_count:round(len(self.dataset) / batch_size) * batch_size]
 
     @staticmethod
-    def normalization(pd_data, max_min_file):
+    def normalization(pd_data, max_min_file, feature_range=(0, 1)):
         data_max = pd_data.max()
         data_min = pd_data.min()
+
         cols_name = []
         for col in pd_data:
             cols_name.append(col)
@@ -223,9 +210,11 @@ class TrainingDatasetGen(keras.utils.Sequence):
         print(pd_ch_name)
         pd_ch_name.to_csv(max_min_file, index=False)
 
+        min_f, max_f = feature_range
         for col in pd_data:
             if col != "Time_Stamp":
                 pd_data[col] = (pd_data[col] - data_min[col]) / (data_max[col] - data_min[col])
+                pd_data[col] = pd_data[col] * (max_f - min_f) + min_f
         return pd_data
 
     def __len__(self):
@@ -234,7 +223,13 @@ class TrainingDatasetGen(keras.utils.Sequence):
     def __getitem__(self, idx):
         batch_x = np.array([self.training_dataset[idx * self.batch_size:idx * self.batch_size + self.windows_size, :]])
         batch_x = tf.convert_to_tensor(batch_x)
-        return batch_x
+        batch_x_arr = []
+        for idx in range(self.caracts_count):
+            batch_x_arr.append(
+                tf.gather(batch_x, idx, axis=2)
+            )
+        batch_x_new = tf.reshape(tf.concat(batch_x_arr, 0), (1, self.caracts_count, self.windows_size))
+        return batch_x_new
 
     def get_valid_len(self):
         return round((self.valid_count - self.windows_size) / self.batch_size)
@@ -256,9 +251,10 @@ class TrainingDatasetGen(keras.utils.Sequence):
 
 def main():
     # Параметры датасета
-    batch_size          = 500
+    batch_size          = 100
     validation_factor   = 0.05
-    windows_size        = 500
+    windows_size        = 100
+    feature_range       = (-1, 1)
 
     # Параметры оптимизатора
     init_learning_rate  = 0.1
@@ -267,12 +263,12 @@ def main():
     staircase           = True
 
     # Параметры нейронной сети
-    count_hidden_layers = 3
-    epochs              = 2
+    count_hidden_layers = 1
+    epochs              = 1
     shuffle             = True
     loss_func           = keras.losses.mse
     path_model          = "modeles\\SunchronTrafficAnomalyDetector\\"
-    versia              = "0.1"
+    versia              = "0.2"
     model_name          = path_model + "model_STAD_v" + versia
     max_min_file        = path_model + "M&M_traffic_VNAT.csv"
     dataset             = "F:\\VNAT\\VNAT_nonvpn_and_characts_06.csv"
@@ -283,7 +279,7 @@ def main():
     data = data.drop(["Time_Stamp"], axis=1)
     print("Загрузка датасета завершена.")
 
-    training_dataset = TrainingDatasetGen(data, max_min_file, batch_size, windows_size, validation_factor)
+    training_dataset = TrainingDatasetGen(data, max_min_file, feature_range, batch_size, windows_size, validation_factor)
     print(training_dataset.numbs_count, training_dataset.caracts_count)
     print("Обучающий датасет создан.")
 
@@ -305,11 +301,8 @@ def main():
     autoencoder.education(training_dataset, epochs=epochs, shuffle=shuffle,
                           model_chekname=model_name, versia=versia,
                           path_model=path_model)
-    autoencoder.build((batch_size, windows_size, training_dataset.caracts_count))
+    # autoencoder.build((batch_size, windows_size, training_dataset.caracts_count))
     autoencoder.summary()
-    autoencoder.encoder.summary()
-    autoencoder.middle.summary()
-    autoencoder.decoder.summary()
     autoencoder.save(model_name)
 
     pylab.subplot(1, 3, 1)
@@ -339,17 +332,37 @@ if __name__ == '__main__':
     #       [0.4, 0.5, 0.6],
     #       [0.7, 0.8, 0.9],
     #       [0.01, 0.11, 0.12]]]
+    # # x = [[[0.1], [0.2], [0.3]]]
     # x = tf.convert_to_tensor(x)
-    # print(x)
+    # x_a = []
+    # # x_new = tf.Tensor()
+    # for idx in range(caracts_count):
+    #     x_a.append(
+    #         tf.gather(x, idx, axis=2)
+    #     )
+    # x_new = tf.reshape(tf.concat(x_a, 0), (1, 3, 4))
+    # print(x_new)
     #
-    # autoencoder = SynchronAutoencoder(caracts_count, batch_size, windows_size, 1)
-    # y = autoencoder(x)
-    # print(y)
+    # rnn1 = SynchronGRU(windows_size, caracts_count, True)
+    # rnn2 = SynchronGRU(windows_size, caracts_count, True)
+    # rnn3 = SynchronGRU(windows_size, caracts_count, False)
+    #
+    # y_rnn1 = rnn1(x_new, None)
+    # print("rnn1:", y_rnn1[0])
+    # print("state rnn1:", y_rnn1[1:])
+    #
+    # y_rnn2 = rnn2(y_rnn1[0], y_rnn1[1:])
+    # print("rnn2:", y_rnn2[0])
+    # print("state rnn2:", y_rnn2[1:])
+    #
+    # y_rnn3 = rnn3(y_rnn2[0], y_rnn2[1:])
+    # print("rnn3:", y_rnn3[0])
 
-    gpu_devices = tf.config.experimental.list_physical_devices("GPU")
-    for device in gpu_devices:
-        tf.config.experimental.set_memory_growth(device, True)
-    tf.config.experimental.set_virtual_device_configuration(gpu_devices[0], [
-        tf.config.experimental.VirtualDeviceConfiguration(memory_limit=6000)])
+
+    # gpu_devices = tf.config.experimental.list_physical_devices("GPU")
+    # for device in gpu_devices:
+    #     tf.config.experimental.set_memory_growth(device, True)
+    # tf.config.experimental.set_virtual_device_configuration(gpu_devices[0], [
+    #     tf.config.experimental.VirtualDeviceConfiguration(memory_limit=6000)])
 
     main()
