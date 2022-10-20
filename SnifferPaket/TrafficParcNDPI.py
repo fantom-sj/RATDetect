@@ -4,8 +4,8 @@
     дополнительные метрики, характеризующие каждый из выделенных потоков данных.
 """
 
-from SnifferPaket.TrafficSniffer import GetNumberIface, __SniffPackets
-from SnifferPaket.characts import CHARACTERISTIC
+from TrafficSniffer import GetNumberIface, __SniffPackets
+from characts import CHARACTERISTIC
 
 from collections import Counter
 from ipaddress import IPv4Address, ip_address, IPv6Address
@@ -588,8 +588,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     rejim = int(args.__dict__["rejim"])
 
-    home = "..\\data\\pcap\\" # str(Path.home())
-    path_sniffer_home = Path(home + "\\temp") # Path(home + "\\SnHome")
+    home = str(Path.home())
+    path_sniffer_home = Path(home + "\\SnHome")
     ip_client = [IPv4Address("192.168.0.144"), IPv4Address("192.168.100.75"), IPv4Address("192.168.10.128")]
 
     if path_sniffer_home.is_dir() is False:
@@ -602,7 +602,7 @@ if __name__ == "__main__":
         path_config_file.touch()
         config_parametrs = {"count_pkt_one_pcap": 10000, "window_size": 1000,
                             "pcap_file_name": "traffic_", "characts_file_name": "characts.csv",
-                            "iface_name": "VMware Network Adapter VMnet3"}
+                            "iface_name": "Беспроводная сеть"}
         with open(str(path_config_file), 'w') as file_conf:
             json.dump(config_parametrs, file_conf)
             print("настройте программу с помощью файла конфигурации:")
