@@ -5,14 +5,17 @@
 
 import tensorflow as tf
 from tensorflow import keras
-from keras import Model, Sequential
-from keras.layers import GRU, Reshape
+from keras import Model
+from keras.layers import GRU, LSTM
 from keras.utils import Progbar
+
+from pathlib import Path
 
 import pandas as pd
 import numpy as np
-import random
+
 import pylab
+import time
 
 from tensorflow.python.client import device_lib
 
@@ -24,62 +27,41 @@ class Autoencoder(Model):
         и как происходит обратное распространение ошибки для обучения.
     """
 
-    def __init__(self, caracts_count:int, arhiteche:list, seed_kernel_init=231654789,
-                 batch_size=1, windows_size=1000, count_hidden_layers=1):
+    def __init__(self, caracts_count: int, arhiteche: dict,
+                 batch_size=1, windows_size=1000):
         super(Autoencoder, self).__init__()
         self.batch_size = batch_size
         self.windows_size = windows_size
         self.caracts_count = caracts_count
-        self.seed_kernel_init = seed_kernel_init
-        self.count_hidden_layers = count_hidden_layers
 
-        self.encoder   = Sequential(name="Encoder")
-        self.middle    = Sequential(name="Middle")
-        self.decoder   = Sequential(name="Decoder")
-
-        if (count_hidden_layers * 2) != (len(arhiteche) - 1):
-            print("Неверно задана архитектура нейронной сети!")
-            exit(-1)
-
-        arhiteche.append(self.caracts_count)
-        index = 0
-        for i in range(count_hidden_layers):
-            self.encoder.add(
-                GRU(
-                    units=arhiteche[index],
-                    activation="tanh",
-                    # kernel_initializer=keras.initializers.he_uniform(self.seed_kernel_init),
-                    return_sequences=True,
-                    name="enc_hid_layer_" + str(i),
-                    input_shape=(self.windows_size, arhiteche[index])
+        self.encdec = []
+        for layer in arhiteche:
+            if "GRU" in layer:
+                self.encdec.append(
+                    GRU(
+                        units=arhiteche[layer],
+                        activation="tanh",
+                        return_sequences=True,
+                        name="layer_" + layer,
+                        input_shape=(self.windows_size, arhiteche[layer]),
+                        dropout=0.2
+                        # stateful=True,
+                        # return_state=True
+                    )
                 )
-            )
-            index += 1
-
-        self.middle.add(
-            GRU(
-                units=arhiteche[index],
-                activation="tanh",
-                # kernel_initializer=keras.initializers.he_uniform(self.seed_kernel_init),
-                return_sequences=True,
-                name="mid_hid_layer",
-                input_shape=(self.windows_size, arhiteche[index])
-            )
-        )
-        index += 1
-
-        for i in range(count_hidden_layers):
-            self.decoder.add(
-                GRU(
-                    units=arhiteche[index],
-                    activation="tanh",
-                    # kernel_initializer=keras.initializers.he_uniform(self.seed_kernel_init),
-                    return_sequences=True,
-                    name="enc_hid_layer_" + str(i),
-                    input_shape=(self.windows_size, arhiteche[index])
+            elif "LSTM" in layer:
+                self.encdec.append(
+                    LSTM(
+                        units=arhiteche[layer],
+                        activation="tanh",
+                        return_sequences=True,
+                        name="layer_" + layer,
+                        input_shape=(self.windows_size, arhiteche[layer]),
+                        dropout=0.2
+                        # stateful=True,
+                        # return_state=True
+                    )
                 )
-            )
-            index += 1
 
         self.loss_tracker = keras.metrics.Mean(name="loss")
         self.mae_metric = keras.metrics.MeanAbsoluteError(name="mae")
@@ -109,12 +91,17 @@ class Autoencoder(Model):
         return loss
 
     def education(self, training_dataset, epochs=1, shuffle=True,
-                  model_chekname="model", versia="1", path_model=""):
+                  model_checkname="model", versia="1", path_model="", checkpoint=None):
         loss = 0
         metrics_names = ["Расхождение", "Средние расхождение", "Средняя абсолютная ошибка"]
 
-        for epoch in range(epochs):
-            print("Эпоха {}/{}".format(epoch+1, epochs))
+        if checkpoint is None:
+            start = 0
+        else:
+            start = checkpoint
+
+        for epoch in range(start, epochs, 1):
+            print("Эпоха {}/{}".format(epoch + 1, epochs))
 
             progress_bar = Progbar(len(training_dataset),
                                    stateful_metrics=metrics_names)
@@ -142,9 +129,15 @@ class Autoencoder(Model):
             self.mae_metric.reset_states()
 
             valid_metrics_name = ["Расхождение", "Средние расхождение"]
-            print("Валидация после эпохи {}".format(epoch+1))
-            progress_bar_valid = Progbar(round(training_dataset.valid_count / self.batch_size),
+            print("Валидация после эпохи {}".format(epoch + 1))
+            progress_bar_valid = Progbar(training_dataset.get_valid_len(),
                                          stateful_metrics=valid_metrics_name)
+
+            self.save_weights(model_checkname + "epoch_" + str(epoch + 1))
+            history_name = path_model + "history_train_e" + str(epoch + 1) + "_v" + versia + ".csv"
+            history_valid_name = path_model + "history_valid_e" + str(epoch + 1) + "_v" + versia + ".csv"
+            pd.DataFrame(self.history_loss).to_csv(history_name, index=False)
+            pd.DataFrame(self.history_valid).to_csv(history_valid_name, index=False)
 
             try:
                 for step, valid_batch_x in enumerate(training_dataset.get_valid()):
@@ -176,23 +169,20 @@ class Autoencoder(Model):
             except:
                 print("Ошибка при валидации!")
 
-            if (epoch+1) != epochs:
-                self.save(model_chekname+"_e"+str(epoch+1))
-                history_name = path_model + "history_train_e" + str(epoch+1) + "_v" + versia + ".csv"
-                history_valid_name = path_model + "history_valid_e" + str(epoch+1) + "_v" + versia + ".csv"
-                pd.DataFrame(self.history_loss).to_csv(history_name, index=False)
-                pd.DataFrame(self.history_valid).to_csv(history_valid_name, index=False)
-
             if shuffle:
                 training_dataset.on_epoch_end()
 
         print("Обучение завершено!\n")
 
     def call(self, input_features):
-        compression = self.encoder(input_features)
-        transfer = self.middle(compression)
-        reconstruction = self.decoder(transfer)
-        return reconstruction
+        x = input_features
+        # state = None
+        for layer in self.encdec:
+            # res = layer(x, state)
+            # x = res[0]
+            # state = res[1]
+            x = layer(x)
+        return x
 
     @property
     def metrics(self):
@@ -206,9 +196,9 @@ class TrainingDatasetGen(keras.utils.Sequence):
         чтобы в дальнейшем передавать по одному батчу в нейронную сеть для очередного шага обучения.
     """
 
-    def __init__(self, dataset, max_min_file, batch_size=1000, windows_size=1000, validation_factor=0.2):
+    def __init__(self, dataset, max_min_file, feature_range, batch_size=1000, windows_size=1000, validation_factor=0.2):
         # Нормализуем данные
-        self.dataset = self.normalization(dataset, max_min_file).to_numpy() #[:50000]
+        self.dataset = self.normalization(dataset, max_min_file, feature_range).to_numpy()[:50000]
         print("Нормализация данных выполнена.")
 
         self.numbs_count, self.caracts_count = self.dataset.shape
@@ -222,12 +212,13 @@ class TrainingDatasetGen(keras.utils.Sequence):
 
         # Создаём тренировочную и валидационную выборку
         self.training_dataset = self.dataset[:self.numbs_count]
-        self.valid_dataset    = self.dataset[self.numbs_count:round(len(self.dataset) / batch_size) * batch_size]
+        self.valid_dataset = self.dataset[self.numbs_count:round(len(self.dataset) / batch_size) * batch_size]
 
     @staticmethod
-    def normalization(pd_data, max_min_file):
+    def normalization(pd_data, max_min_file, feature_range=(0, 1)):
         data_max = pd_data.max()
         data_min = pd_data.min()
+
         cols_name = []
         for col in pd_data:
             cols_name.append(col)
@@ -235,31 +226,19 @@ class TrainingDatasetGen(keras.utils.Sequence):
         print(pd_ch_name)
         pd_ch_name.to_csv(max_min_file, index=False)
 
+        min_f, max_f = feature_range
         for col in pd_data:
             if col != "Time_Stamp":
                 pd_data[col] = (pd_data[col] - data_min[col]) / (data_max[col] - data_min[col])
+                pd_data[col] = pd_data[col] * (max_f - min_f) + min_f
         return pd_data
 
     def __len__(self):
-        return round((self.numbs_count - self.windows_size) / self.batch_size)-2
+        return round((self.numbs_count - self.windows_size) / self.batch_size) - 1
 
     def __getitem__(self, idx):
-        batch_x = []
-        for index in range(self.batch_size):
-            batch_x.append(
-                self.training_dataset[idx * self.batch_size + index:idx * self.batch_size + index + self.windows_size, :]
-            )
-        batch_x = np.array(batch_x)
-        # batch_x = np.array([self.training_dataset[idx * self.batch_size:idx * self.batch_size + self.windows_size, :]])
-        try:
-            x, y, z = batch_x.shape
-        except ValueError:
-            print("Ошибка при создании batch_x, его размерность не является 3х мерной! Размерность:", batch_x.shape)
-            print("Был возвращён батч с нулевыми значениями размерности.")
-            batch_x = [[[]]]
-            batch_x = np.array(batch_x)
-            print(batch_x.shape)
-            return batch_x
+        batch_x = np.array([self.training_dataset[idx * self.batch_size:idx * self.batch_size + self.windows_size, :]])
+        batch_x = tf.convert_to_tensor(batch_x)
         return batch_x
 
     def get_valid_len(self):
@@ -271,53 +250,75 @@ class TrainingDatasetGen(keras.utils.Sequence):
         for idx in range(len_valid):
             valid_batch_x = np.array(
                 [self.valid_dataset[idx * self.batch_size:idx * self.batch_size + self.windows_size, :]])
-            valid_arr.append(valid_batch_x)
-
-        return np.array(valid_arr)
+            valid_arr.append(tf.convert_to_tensor(valid_batch_x))
+        return valid_arr
 
     def on_epoch_end(self):
-        np.random.shuffle(self.training_dataset)
-        np.random.shuffle(self.valid_dataset)
+        print("Перемешивание обучающего датасета!")
+        idx_arr = []
+        for idx in range(round((self.numbs_count - self.windows_size) / self.batch_size)):
+            idx_arr.append(idx)
+        idx_arr = np.array(idx_arr)
+        np.random.shuffle(idx_arr)
+        print(idx_arr)
+
+        print(self.training_dataset)
+        training_dataset_new = []
+        for idx in idx_arr:
+            training_dataset_new.append(self.training_dataset[idx * self.batch_size:
+                                                              idx * self.batch_size + self.windows_size, :].tolist())
+        self.training_dataset = np.array(training_dataset_new)
+        print("Перемешивание выполнено.")
 
 
 def main():
     # Параметры датасета
-    batch_size          = 1000
-    validation_factor   = 0.05
-    windows_size        = 100
+    batch_size = 1000
+    validation_factor = 0.05
+    windows_size = 1000
+    feature_range = (-1, 1)
 
     # Параметры оптимизатора
-    init_learning_rate  = 0.1
-    decay_steps         = 1500
-    decay_rate          = 0.96
-    staircase           = True
+    init_learning_rate = 0.1
+    decay_steps = 1500
+    decay_rate = 0.96
+    staircase = True
 
     # Параметры нейронной сети
-    count_hidden_layers = 3
-    epochs              = 2
-    seed                = random.randint(1111111111, 9999999999)
-    shuffle             = False
-    loss_func           = keras.losses.mse
-    arhiteche           = [17, 17, 17, 17, 17, 17, 17]
-    path_model          = "modeles\\TrafficAnomalyDetector\\"
-    versia              = "0.8"
-    model_name          = path_model + "model_TAD_v" + versia
-    max_min_file        = path_model + "M&M_traffic_VNAT.csv"
-    dataset             = "F:\\VNAT\\VNAT_nonvpn_and_characts_06.csv"
-    history_name        = path_model + "history_train_v" + versia + ".csv"
-    history_valid_name  = path_model + "history_valid_v" + versia + ".csv"
+    epochs = 3
+    continue_education = True
+    checkpoint = 2
+    shuffle = False
+    loss_func = keras.losses.mse
+    arhiteche = {"GRU_1": 17, "GRU_2": 17, "LSTM_3": 17, "GRU_4": 17, "LSTM_5": 17, "GRU_6": 17, "GRU_7": 17}
+    versia = "0.8.3"
+    path_model = "modeles\\TrafficAnomalyDetector\\" + versia + "\\"
+    model_name = path_model + "model_TAD_v" + versia
+    max_min_file = path_model + "M&M_traffic_VNAT.csv"
+    dataset = "F:\\VNAT\\only_characts_01.csv"
+    history_name = path_model + "history_train_v" + versia + ".csv"
+    history_valid_name = path_model + "history_valid_v" + versia + ".csv"
+
+    if not Path(path_model).exists():
+        Path(path_model).mkdir()
+
+    if not Path(path_model + "Checkpoint\\").exists():
+        Path(path_model + "Checkpoint\\").mkdir()
 
     data = pd.read_csv(dataset)
     data = data.drop(["Time_Stamp"], axis=1)
     print("Загрузка датасета завершена.")
 
-    training_dataset = TrainingDatasetGen(data, max_min_file, batch_size, windows_size, validation_factor)
+    training_dataset = TrainingDatasetGen(data, max_min_file, feature_range, batch_size, windows_size,
+                                          validation_factor)
     print(training_dataset.numbs_count, training_dataset.caracts_count)
     print("Обучающий датасет создан.")
 
     autoencoder = Autoencoder(training_dataset.caracts_count, arhiteche,
-                              seed_kernel_init=seed, batch_size=batch_size,
-                              windows_size=windows_size, count_hidden_layers=count_hidden_layers)
+                              batch_size=batch_size,
+                              windows_size=windows_size)
+    autoencoder.build((1, windows_size, training_dataset.caracts_count))
+    autoencoder.summary()
 
     lr_schedule = keras.optimizers.schedules.ExponentialDecay(
         init_learning_rate,
@@ -331,32 +332,26 @@ def main():
     autoencoder.compile(optimizer="adam", loss=loss_func)
     print("Автоэнкодер определён.")
 
-    print("Начинаем обучение:")
+    if continue_education:
+        checkpoint_name = "modeles\\TrafficAnomalyDetector\\" + versia + "\\Checkpoint\\epoch_" + str(checkpoint)
+        autoencoder.load_weights(checkpoint_name)
+        print("Продолжаем обучение:")
+    else:
+        checkpoint = None
+        print("Начинаем обучение:")
+
     autoencoder.education(training_dataset, epochs=epochs, shuffle=shuffle,
-                          model_chekname=model_name, versia=versia,
-                          path_model=path_model)
-    autoencoder.build((batch_size, windows_size, training_dataset.caracts_count))
-    autoencoder.summary()
-    autoencoder.encoder.summary()
-    autoencoder.middle.summary()
-    autoencoder.decoder.summary()
+                          model_checkname=path_model + "Checkpoint\\", versia=versia,
+                          path_model=path_model, checkpoint=checkpoint)
     autoencoder.save(model_name)
-
-    pylab.subplot(1, 3, 1)
-    pylab.plot(autoencoder.history_loss["loss"])
-    pylab.title("Расхождение")
-
-    pylab.subplot(1, 3, 1)
-    pylab.plot(autoencoder.history_loss["mean_loss"])
-    pylab.title("Средние расхождение")
-
-    pylab.subplot(1, 3, 1)
-    pylab.plot(autoencoder.history_loss["mae"])
-    pylab.title("Средняя абсолютная ошибка")
 
     pd.DataFrame(autoencoder.history_loss).to_csv(history_name, index=False)
     pd.DataFrame(autoencoder.history_valid).to_csv(history_valid_name, index=False)
 
+
 if __name__ == '__main__':
     # print(device_lib.list_local_devices())
+    print("Ожидаем начала обучения!")
+    # time.sleep(9000)
+    print("Запускаем обучение!")
     main()
