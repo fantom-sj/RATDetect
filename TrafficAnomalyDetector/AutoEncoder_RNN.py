@@ -42,9 +42,9 @@ class Autoencoder(Model):
                         units=arhiteche[layer],
                         activation="tanh",
                         return_sequences=True,
-                        name="layer_" + layer,
+                        name="layer_t." + layer + "_a." + str(arhiteche[layer]),
                         input_shape=(self.windows_size, arhiteche[layer]),
-                        dropout=0.2
+                        # dropout=0.2
                         # stateful=True,
                         # return_state=True
                     )
@@ -55,9 +55,9 @@ class Autoencoder(Model):
                         units=arhiteche[layer],
                         activation="tanh",
                         return_sequences=True,
-                        name="layer_" + layer,
+                        name="layer_t." + layer + "_a." + str(arhiteche[layer]),
                         input_shape=(self.windows_size, arhiteche[layer]),
-                        dropout=0.2
+                        # dropout=0.2
                         # stateful=True,
                         # return_state=True
                     )
@@ -106,6 +106,7 @@ class Autoencoder(Model):
             progress_bar = Progbar(len(training_dataset),
                                    stateful_metrics=metrics_names)
 
+            itter = 0
             # Итерируем по пакетам в датасете.
             for step, x_batch_train in enumerate(training_dataset):
                 loss = self.train_step(x_batch_train) * 100
@@ -124,6 +125,15 @@ class Autoencoder(Model):
                           ("Средняя абсолютная ошибка", (float(mae_metric_res)))]
 
                 progress_bar.add(1, values=values)
+                itter += 1
+
+                if itter % 1000 == 0:
+                    self.save_weights(model_checkname + "itter_" + str(round(itter / 1000)))
+                    history_name = path_model + "history_train_i" + str(round(itter / 1000)) + "_v" + versia + ".csv"
+                    history_valid_name = path_model + "history_valid_i" + str(round(itter / 1000)) \
+                                         + "_v" + versia + ".csv"
+                    pd.DataFrame(self.history_loss).to_csv(history_name, index=False)
+                    pd.DataFrame(self.history_valid).to_csv(history_valid_name, index=False)
 
             self.loss_tracker.reset_states()
             self.mae_metric.reset_states()
@@ -169,18 +179,14 @@ class Autoencoder(Model):
             except:
                 print("Ошибка при валидации!")
 
-            if shuffle:
+            if shuffle and (epoch != (epochs - 1)):
                 training_dataset.on_epoch_end()
 
         print("Обучение завершено!\n")
 
     def call(self, input_features):
         x = input_features
-        # state = None
         for layer in self.encdec:
-            # res = layer(x, state)
-            # x = res[0]
-            # state = res[1]
             x = layer(x)
         return x
 
@@ -198,7 +204,7 @@ class TrainingDatasetGen(keras.utils.Sequence):
 
     def __init__(self, dataset, max_min_file, feature_range, batch_size=1000, windows_size=1000, validation_factor=0.2):
         # Нормализуем данные
-        self.dataset = self.normalization(dataset, max_min_file, feature_range).to_numpy()[:50000]
+        self.dataset = self.normalization(dataset, max_min_file, feature_range).to_numpy() #[:50000]
         print("Нормализация данных выполнена.")
 
         self.numbs_count, self.caracts_count = self.dataset.shape
@@ -212,19 +218,24 @@ class TrainingDatasetGen(keras.utils.Sequence):
 
         # Создаём тренировочную и валидационную выборку
         self.training_dataset = self.dataset[:self.numbs_count]
+        self.training_dataset = tf.convert_to_tensor(self.training_dataset)
+        self.training_dataset = tf.reshape(self.training_dataset,
+                                           (round(self.numbs_count / self.batch_size), self.windows_size,
+                                            self.caracts_count))
         self.valid_dataset = self.dataset[self.numbs_count:round(len(self.dataset) / batch_size) * batch_size]
 
     @staticmethod
-    def normalization(pd_data, max_min_file, feature_range=(0, 1)):
+    def normalization(pd_data, max_min_file=None, feature_range=(0, 1)):
         data_max = pd_data.max()
         data_min = pd_data.min()
 
-        cols_name = []
-        for col in pd_data:
-            cols_name.append(col)
-        pd_ch_name = pd.DataFrame([data_max, data_min], columns=cols_name)
-        print(pd_ch_name)
-        pd_ch_name.to_csv(max_min_file, index=False)
+        if max_min_file is not None:
+            cols_name = []
+            for col in pd_data:
+                cols_name.append(col)
+            pd_ch_name = pd.DataFrame([data_max, data_min], columns=cols_name)
+            print(pd_ch_name)
+            pd_ch_name.to_csv(max_min_file, index=False)
 
         min_f, max_f = feature_range
         for col in pd_data:
@@ -234,11 +245,11 @@ class TrainingDatasetGen(keras.utils.Sequence):
         return pd_data
 
     def __len__(self):
-        return round((self.numbs_count - self.windows_size) / self.batch_size) - 1
+        return round(self.numbs_count / self.batch_size)
 
     def __getitem__(self, idx):
-        batch_x = np.array([self.training_dataset[idx * self.batch_size:idx * self.batch_size + self.windows_size, :]])
-        batch_x = tf.convert_to_tensor(batch_x)
+        batch_x = tf.gather(self.training_dataset, idx, axis=0)
+        batch_x = tf.reshape(batch_x, (1, self.windows_size, self.caracts_count))
         return batch_x
 
     def get_valid_len(self):
@@ -255,49 +266,37 @@ class TrainingDatasetGen(keras.utils.Sequence):
 
     def on_epoch_end(self):
         print("Перемешивание обучающего датасета!")
-        idx_arr = []
-        for idx in range(round((self.numbs_count - self.windows_size) / self.batch_size)):
-            idx_arr.append(idx)
-        idx_arr = np.array(idx_arr)
-        np.random.shuffle(idx_arr)
-        print(idx_arr)
-
-        print(self.training_dataset)
-        training_dataset_new = []
-        for idx in idx_arr:
-            training_dataset_new.append(self.training_dataset[idx * self.batch_size:
-                                                              idx * self.batch_size + self.windows_size, :].tolist())
-        self.training_dataset = np.array(training_dataset_new)
+        self.training_dataset = tf.random.shuffle(self.training_dataset)
         print("Перемешивание выполнено.")
 
 
-def main():
+def main(versia, arhiteche):
     # Параметры датасета
-    batch_size = 1000
-    validation_factor = 0.05
-    windows_size = 1000
-    feature_range = (-1, 1)
+    batch_size          = 1000
+    validation_factor   = 0.05
+    windows_size        = 1000
+    feature_range       = (-1, 1)
 
     # Параметры оптимизатора
-    init_learning_rate = 0.1
-    decay_steps = 1500
-    decay_rate = 0.96
-    staircase = True
+    init_learning_rate  = 0.1
+    decay_steps         = 1500
+    decay_rate          = 0.96
+    staircase           = True
 
     # Параметры нейронной сети
-    epochs = 3
-    continue_education = True
-    checkpoint = 2
-    shuffle = False
-    loss_func = keras.losses.mse
-    arhiteche = {"GRU_1": 17, "GRU_2": 17, "LSTM_3": 17, "GRU_4": 17, "LSTM_5": 17, "GRU_6": 17, "GRU_7": 17}
-    versia = "0.8.3"
-    path_model = "modeles\\TrafficAnomalyDetector\\" + versia + "\\"
-    model_name = path_model + "model_TAD_v" + versia
-    max_min_file = path_model + "M&M_traffic_VNAT.csv"
-    dataset = "F:\\VNAT\\only_characts_01.csv"
-    history_name = path_model + "history_train_v" + versia + ".csv"
-    history_valid_name = path_model + "history_valid_v" + versia + ".csv"
+    epochs              = 1
+    continue_education  = False
+    checkpoint          = None
+    shuffle             = False
+    loss_func           = keras.losses.mse
+    arhiteche           = arhiteche
+    versia              = versia
+    path_model          = "modeles\\TrafficAnomalyDetector\\" + versia + "\\"
+    model_name          = path_model + "model_TAD_v" + versia
+    max_min_file        = path_model + "M&M_traffic_VNAT.csv"
+    dataset             = "F:\\VNAT\\characts_youtube_me.csv"
+    history_name        = path_model + "history_train_v" + versia + ".csv"
+    history_valid_name  = path_model + "history_valid_v" + versia + ".csv"
 
     if not Path(path_model).exists():
         Path(path_model).mkdir()
@@ -307,6 +306,10 @@ def main():
 
     data = pd.read_csv(dataset)
     data = data.drop(["Time_Stamp"], axis=1)
+    data = data.drop(["Dev_size_TCP_paket"], axis=1)
+    data = data.drop(["Dev_size_UDP_paket"], axis=1)
+    data = data.drop(["Dev_client_paket_size"], axis=1)
+    data = data.drop(["Dev_server_paket_size"], axis=1)
     print("Загрузка датасета завершена.")
 
     training_dataset = TrainingDatasetGen(data, max_min_file, feature_range, batch_size, windows_size,
@@ -320,14 +323,14 @@ def main():
     autoencoder.build((1, windows_size, training_dataset.caracts_count))
     autoencoder.summary()
 
-    lr_schedule = keras.optimizers.schedules.ExponentialDecay(
-        init_learning_rate,
-        decay_steps=decay_steps,
-        decay_rate=decay_rate,
-        staircase=staircase
-    )
-
-    optimizer = keras.optimizers.Adam(learning_rate=lr_schedule)
+    # lr_schedule = keras.optimizers.schedules.ExponentialDecay(
+    #     init_learning_rate,
+    #     decay_steps=decay_steps,
+    #     decay_rate=decay_rate,
+    #     staircase=staircase
+    # )
+    #
+    # optimizer = keras.optimizers.Adam(learning_rate=lr_schedule)
 
     autoencoder.compile(optimizer="adam", loss=loss_func)
     print("Автоэнкодер определён.")
@@ -354,4 +357,8 @@ if __name__ == '__main__':
     print("Ожидаем начала обучения!")
     # time.sleep(9000)
     print("Запускаем обучение!")
-    main()
+
+    arhiteche = {"GRU_1": 13, "GRU_2": 12, "GRU_3": 11, "GRU_4": 10, "GRU_5": 11, "GRU_6": 12, "GRU_7": 13}
+    versia = "0.8.5.4"
+    print("\n\n" + versia)
+    main(versia, arhiteche)

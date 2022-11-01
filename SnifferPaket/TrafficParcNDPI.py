@@ -360,8 +360,6 @@ def PreprocessingPcapng(sniffer_home, window_size, ip_client, pcap_file_name, ch
         except Exception as err:
             logging.exception(f"Ошибка!\n{err}")
             return False
-
-
     else:
         print("Парсинг файла: %s"%pcap_file_name)
 
@@ -588,9 +586,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     rejim = int(args.__dict__["rejim"])
 
-    home = str(Path.home())
+    home = "F:\\VNAT"  # str(Path.home())
     path_sniffer_home = Path(home + "\\SnHome")
-    ip_client = [IPv4Address("192.168.0.144"), IPv4Address("192.168.100.75"), IPv4Address("192.168.10.128")]
+    ip_client = [IPv4Address("192.168.10.128")] #IPv4Address("192.168.0.144"), IPv4Address("192.168.100.75"),
 
     if path_sniffer_home.is_dir() is False:
         path_sniffer_home.mkdir(mode=0o777, parents=False, exist_ok=False)
@@ -601,8 +599,8 @@ if __name__ == "__main__":
     if path_config_file.exists() is False:
         path_config_file.touch()
         config_parametrs = {"count_pkt_one_pcap": 10000, "window_size": 1000,
-                            "pcap_file_name": "traffic_", "characts_file_name": "characts.csv",
-                            "iface_name": "Беспроводная сеть"}
+                            "pcap_file_name": "traffic_", "characts_file_name": "characts_youtube.csv",
+                            "iface_name": "VMware_Network_Adapter_VMnet3"}
         with open(str(path_config_file), 'w') as file_conf:
             json.dump(config_parametrs, file_conf)
             print("настройте программу с помощью файла конфигурации:")
