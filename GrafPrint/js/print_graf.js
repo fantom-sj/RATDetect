@@ -1,4 +1,6 @@
 function getData(event) {
+    var index_col = 17
+
 	var files = event.target.files;
 	var file = files[0];
 
@@ -6,22 +8,25 @@ function getData(event) {
 	reader.readAsText(file);
 	reader.onload = function(event){
 		var csv = event.target.result;
+
+		const col_names = $.csv.toArrays(csv).slice(0, 1);
+		console.log(col_names[0][index_col])
 		const data = $.csv.toArrays(csv).slice(1);
 
 		arr = []
 		index = 0
 		for(let el of data){
-			el = Number(el[16]);
+			el = Number(el[index_col]);
 			arr.push([index, el]);
 			index++;
 		}
 		setTimeout(() => {
-			print_graff(arr);
+			print_graff(arr, col_names[0][index_col]);
 		}, 2000);
 	}
 }
 
-function print_graff(arr) {
+function print_graff(arr, col_name) {
 	start 		= 1000
 	speed 		= 65
 	window_size = 50
@@ -37,12 +42,12 @@ function print_graff(arr) {
 	chart.tooltip().positionMode('point');
 	//chart.tooltip().displayMode('union');
 	//chart.title('');
-	chart.yAxis().title('Колличество килобайт');
+	chart.yAxis().title('Интенсивность');
 	chart.xAxis().labels().padding(5);
 
 	var firstSeries = chart.area(firstSeriesData);
 	firstSeries.color('#DE834D');
-	firstSeries.name('Количество килобайт принятых от сервера');
+	firstSeries.name(col_name);
 	firstSeries.hovered().markers().enabled(true).type('square').size(10); // square diamonds
 	firstSeries
 		.tooltip()
