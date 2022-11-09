@@ -74,7 +74,7 @@ def print_model_res(file_path, train, valid, feature_range = (0, 100),
             name_graf   = f"История обучения в эпоху {epoch} для модели {model}"
         elif "train" in file:
             model       = file.split("_")[2].split(".c")[0]
-            name_graf   = f"История всего обучения модели {model}"
+            name_graf   = f"История обучения модели"
         elif "valid_e" in file:
             epoch       = file.split("_")[2][1]
             model       = file.split("_")[3].split(".c")[0]
@@ -120,9 +120,9 @@ def print_model_res(file_path, train, valid, feature_range = (0, 100),
         plt.grid(which='major')
         plt.grid(which='minor', linestyle=':')
 
-        plt.plot(norm_metrics["loss"], label="Потери при обучении", color="tab:red")
-        plt.plot(norm_metrics["mean_loss"], label="Средний уровень потерь", color="tab:blue")
-        plt.plot(norm_metrics["mae"], label="Средняя абсолютная ошибка", color="tab:green")
+        plt.plot(norm_metrics["loss"], label="Ошибка прогнозирования", color="tab:red")
+        plt.plot(norm_metrics["mean_loss"], label="Средний уровень ошибок", color="tab:blue")
+        # plt.plot(norm_metrics["mae"], label="Средняя абсолютная ошибка", color="tab:green")
 
         plt.legend(fontsize=10)
         plt.tight_layout()
@@ -140,22 +140,23 @@ def main():
     #
     # merge_csv(str(path) + "\\VNAT_nonvpn.csv", file_arr)
 
-    # merge_csv("F:\\VNAT\\nonvpn_rdp.csv", [
-    #     "F:\\VNAT\\temp\\characts_nonvpn_rdp_capture1.csv",
-    #     "F:\\VNAT\\temp\\characts_nonvpn_rdp_capture2.csv",
-    #     "F:\\VNAT\\temp\\characts_nonvpn_rdp_capture3.csv",
-    #     "F:\\VNAT\\temp\\characts_nonvpn_rdp_capture4.csv",
-    #     "F:\\VNAT\\temp\\characts_nonvpn_rdp_capture_5.csv",
+    # merge_csv("F:\\VNAT\\Mytraffic\\youtube_me\\learn_and_valid_dataset\\dataset_all.csv", [
+    #     "F:\\VNAT\\Mytraffic\\youtube_me\\learn_and_valid_dataset\\dataset_0.csv",
+    #     "F:\\VNAT\\Mytraffic\\youtube_me\\learn_and_valid_dataset\\dataset_1.csv",
+    #     "F:\\VNAT\\Mytraffic\\youtube_me\\learn_and_valid_dataset\\dataset_2.csv",
+    #     "F:\\VNAT\\Mytraffic\\youtube_me\\learn_and_valid_dataset\\dataset_3.csv",
+    #     "F:\\VNAT\\Mytraffic\\youtube_me\\learn_and_valid_dataset\\dataset_4.csv",
+    #     "F:\\VNAT\\Mytraffic\\youtube_me\\learn_and_valid_dataset\\dataset_5.csv"
     # ])
 
-    versia          = "0.8.5.4.0"
+    versia          = "0.8.6.2"
     path_model      = "D:\\Пользователи\\Admin\\Рабочий стол\\Статья по КБ\\RATDetect\\" \
                       "TrafficAnomalyDetector\\modeles\\TrafficAnomalyDetector\\" + versia
     train           = True
-    valid           = True
+    valid           = False
     feature_range   = (0, 100)
-    window_length   = 131
-    window_valid    = 131
+    window_length   = 31
+    window_valid    = 2
     polyorder       = 3
 
     print_model_res(path_model, train, valid, feature_range, window_length, window_valid, polyorder)

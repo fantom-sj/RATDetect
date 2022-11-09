@@ -1,5 +1,5 @@
 from ipaddress import IPv4Address, ip_address, IPv6Address
-from characts import CulcCharactsOnWindow, CHARACTERISTIC
+from SnifferPaket.characts import CulcCharactsOnWindow, CHARACTERISTIC
 from threading import Thread
 from pathlib import Path
 
@@ -154,6 +154,7 @@ class Analyzer:
         self.run_analyz         = True
         self.th_main_analyz     = None
         self.index_charact_file = 0
+        self.GetLastFileId()
 
         self.GetFilesTraffic()
 
@@ -296,15 +297,16 @@ class Analyzer:
         file_only_name = file_name.split("\\")[-1]
         Path(file_name).rename(path_new + "\\" + file_only_name)
 
-    def ProcessingTrafficFile(self, pcap_file_name):
-        print(f"Запускаем обработку файла: {pcap_file_name}")
-        self.ParseTraffic(pcap_file_name)
+    def ProcessingTraffic(self, pcap_file_name=None):
+        if not (pcap_file_name is None):
+            print(f"Запускаем обработку файла: {pcap_file_name}")
+            self.ParseTraffic(pcap_file_name)
 
         array_characts = []
         try:
-            while len(self.array_paket_global) >= window_size:
+            while len(self.array_paket_global) >= self.window_size:
                 array_pkt = self.array_paket_global[:self.window_size]
-                ch = CulcCharactsOnWindow(array_pkt, window_size, ip_client)
+                ch = CulcCharactsOnWindow(array_pkt, self.window_size, self.ip_client)
                 if ch is not None:
                     array_characts.append(ch)
                 else:
@@ -347,6 +349,24 @@ class Analyzer:
                 logging.exception(f"Ошибка!\n{err}")
                 return False
 
+    def PaketsAnalyz(self, pakets):
+        for pkt in pakets:
+            self.array_paket_global.append(pkt)
+
+        if Path(self.path_name + "\\" + self.trffic_name).exists():
+            characts_file_name = self.path_name + "\\" + self.trffic_name + "\\" + \
+                                 self.charact_file_mask + str(self.index_charact_file) + ".csv"
+            if not Path(characts_file_name).exists():
+                pd_ch_name = pd.DataFrame()
+                for ch in CHARACTERISTIC:
+                    pd_ch_name[ch] = []
+                pd_ch_name.to_csv(str(characts_file_name), index=False)
+
+            print("Запущен анализ заданных пакетов")
+            self.ProcessingTraffic()
+        else:
+            print("Директория с трафиком для анализа не существует, видимо процесс сбора трафика не был запущен ранее!")
+
     def AnalyzLoop(self):
 
         while self.run_analyz:
@@ -356,7 +376,7 @@ class Analyzer:
                 continue
             else:
                 try:
-                    self.ProcessingTrafficFile(self.files_traffic_arr[0])
+                    self.ProcessingTraffic(self.files_traffic_arr[0])
                     self.files_traffic_arr.pop(0)
                 except IndexError:
                     continue
@@ -383,24 +403,24 @@ class Analyzer:
 if __name__ == '__main__':
     # Параметры сборщика трафика
     size_pcap_length            = 10000
-    iface_name                  = "Беспроводная сеть"
+    iface_name                  = "VMware_Network_Adapter_VMnet3"
     trffic_file_mask            = "traffic_"
-    trffic_name                 = "test_traffic"
-    path_name                   = "F:\\VNAT\\Mytraffic"
+    trffic_name                 = "test_dataset_anomaly"
+    path_name                   = "F:\\VNAT\\Mytraffic\\youtube_me\\"
 
     # Дополнительные параметры анализатора трафика
     window_size = 1000
-    charact_file_length = 20000
-    charact_file_name = "characts_"
-    ip_client = [IPv4Address("192.168.0.144")]
+    charact_file_length = 1000000
+    charact_file_name = "dataset_"
+    ip_client = [IPv4Address("192.168.10.128")]
 
     sniffer = Sniffer(size_pcap_length, iface_name, trffic_name, trffic_file_mask, path_name)
     sniffer.run()
     # time.sleep(200)
     # sniffer.stop()
 
-    analizator = Analyzer(window_size, charact_file_length, charact_file_name, ip_client, path_name, trffic_name)
-    analizator.run()
+    # analizator = Analyzer(window_size, charact_file_length, charact_file_name, ip_client, path_name, trffic_name)
+    # analizator.run()
 
 
 

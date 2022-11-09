@@ -27,11 +27,9 @@ class Autoencoder(Model):
         и как происходит обратное распространение ошибки для обучения.
     """
 
-    def __init__(self, caracts_count: int, arhiteche: dict,
-                 batch_size=1, windows_size=1000):
+    def __init__(self, caracts_count: int, arhiteche: dict, window_size=1000):
         super(Autoencoder, self).__init__()
-        self.batch_size = batch_size
-        self.windows_size = windows_size
+        self.window_size = window_size
         self.caracts_count = caracts_count
 
         self.encdec = []
@@ -43,10 +41,10 @@ class Autoencoder(Model):
                         activation="tanh",
                         return_sequences=True,
                         name="layer_t." + layer + "_a." + str(arhiteche[layer]),
-                        input_shape=(self.windows_size, arhiteche[layer]),
+                        input_shape=(self.window_size, arhiteche[layer]),
                         # dropout=0.2
                         # stateful=True,
-                        # return_state=True
+                        return_state=True
                     )
                 )
             elif "LSTM" in layer:
@@ -56,10 +54,10 @@ class Autoencoder(Model):
                         activation="tanh",
                         return_sequences=True,
                         name="layer_t." + layer + "_a." + str(arhiteche[layer]),
-                        input_shape=(self.windows_size, arhiteche[layer]),
+                        input_shape=(self.window_size, arhiteche[layer]),
                         # dropout=0.2
                         # stateful=True,
-                        # return_state=True
+                        return_state=True
                     )
                 )
 
@@ -186,8 +184,12 @@ class Autoencoder(Model):
 
     def call(self, input_features):
         x = input_features
+        state = None
         for layer in self.encdec:
-            x = layer(x)
+            # if "GRU_4" in layer.name:
+            #     x, state = layer(x, initial_state=state)
+            # else:
+             x, state = layer(x)
         return x
 
     @property
@@ -274,7 +276,7 @@ def main(versia, arhiteche):
     # Параметры датасета
     batch_size          = 1000
     validation_factor   = 0.05
-    windows_size        = 1000
+    window_size         = 1000
     feature_range       = (-1, 1)
 
     # Параметры оптимизатора
@@ -294,7 +296,7 @@ def main(versia, arhiteche):
     path_model          = "modeles\\TrafficAnomalyDetector\\" + versia + "\\"
     model_name          = path_model + "model_TAD_v" + versia
     max_min_file        = path_model + "M&M_traffic_VNAT.csv"
-    dataset             = "F:\\VNAT\\characts_youtube_me.csv"
+    dataset             = "F:\\VNAT\\Mytraffic\\youtube_me\\learn_and_valid_dataset\\dataset_all.csv"
     history_name        = path_model + "history_train_v" + versia + ".csv"
     history_valid_name  = path_model + "history_valid_v" + versia + ".csv"
 
@@ -306,21 +308,21 @@ def main(versia, arhiteche):
 
     data = pd.read_csv(dataset)
     data = data.drop(["Time_Stamp"], axis=1)
+    data = data.drop(["Count_src_is_dst_ports"], axis=1)
     data = data.drop(["Dev_size_TCP_paket"], axis=1)
     data = data.drop(["Dev_size_UDP_paket"], axis=1)
     data = data.drop(["Dev_client_paket_size"], axis=1)
     data = data.drop(["Dev_server_paket_size"], axis=1)
+
     print("Загрузка датасета завершена.")
 
-    training_dataset = TrainingDatasetGen(data, max_min_file, feature_range, batch_size, windows_size,
+    training_dataset = TrainingDatasetGen(data, max_min_file, feature_range, batch_size, window_size,
                                           validation_factor)
     print(training_dataset.numbs_count, training_dataset.caracts_count)
     print("Обучающий датасет создан.")
 
-    autoencoder = Autoencoder(training_dataset.caracts_count, arhiteche,
-                              batch_size=batch_size,
-                              windows_size=windows_size)
-    autoencoder.build((1, windows_size, training_dataset.caracts_count))
+    autoencoder = Autoencoder(training_dataset.caracts_count, arhiteche, window_size)
+    autoencoder.build((1, window_size, training_dataset.caracts_count))
     autoencoder.summary()
 
     # lr_schedule = keras.optimizers.schedules.ExponentialDecay(
@@ -358,7 +360,7 @@ if __name__ == '__main__':
     # time.sleep(9000)
     print("Запускаем обучение!")
 
-    arhiteche = {"GRU_1": 13, "GRU_2": 12, "GRU_3": 11, "GRU_4": 10, "GRU_5": 11, "GRU_6": 12, "GRU_7": 13}
-    versia = "0.8.5.4"
+    arhiteche = {"GRU_1": 15, "GRU_2": 14, "GRU_3": 13, "GRU_4": 12, "GRU_5": 13, "GRU_6": 14, "GRU_7": 15}
+    versia = "0.8.6.2"
     print("\n\n" + versia)
     main(versia, arhiteche)

@@ -1,89 +1,122 @@
 import tensorflow as tf
+from scipy.signal import savgol_filter
 from tensorflow import keras
 from keras.utils import Progbar
+from ipaddress import IPv4Address
 
-from AutoEncoder_RNN import Autoencoder, TrainingDatasetGen
+from AutoEncoder_RNN import TrainingDatasetGen
+from SnifferPaket.StreamingTrafficAnalyzer import Analyzer
+from SnifferPaket.TestDatasetCreate import TrafficTestGen, sequence, increasingly, random, descending
 
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
-from scipy.signal import savgol_filter
+import logging
+
+
+def CreateTestDataset(window_size):
+    path_name = "F:\\VNAT\\Mytraffic\\youtube_me"
+    trffic_name = "test_dataset"
+    normal_name = "test_dataset_narmal"
+    anomal_name = "test_dataset_anomaly"
+
+    charact_file_length = 10000000
+    charact_file_name = "test_dataset_2"
+    ip_client = [IPv4Address("192.168.10.128")]
+
+    paradigma = [(10000, 0, sequence),
+                 (300, 0.06, increasingly), (5000, 3000, random), (300, 0.06, descending),
+                 (10000, 0, sequence), (0, 5000, sequence),
+                 (10000, 0, sequence), (10000, 10000, random),
+                 (10000, 0, sequence), (100, 0.3, increasingly), (5000, 1000, random), (200, 0.02, descending),
+                 (10000, 0, sequence), (200, 0.1, increasingly), (200, 0.1, descending),
+                 (10000, 0, sequence), (200, 0.02, increasingly), (200, 0.02, descending), (10000, 0, sequence)]
+
+    # paradigma = [(2000, 0, sequence), (300, 0.06, increasingly), (300, 0.06, descending), (2000, 0, sequence)]
+
+    normal_pcap_files = []
+    for i in range(511, 611, 1):
+        normal_pcap_files.append("traffic_" + str(i) + ".pcapng")
+
+    anomal_pcap_files = []
+    for i in range(0, 55, 1):
+        anomal_pcap_files.append("traffic_" + str(i) + ".pcapng")
+
+    generator = TrafficTestGen(window_size, normal_name, anomal_name, path_name)
+    generator.SetBasicTraffic(normal_pcap_files, anomal_pcap_files)
+    pakets = generator.MixPakets(paradigma)
+    print(f"Получен массив из {len(pakets)} сетевых пакетов")
+
+    analizator = Analyzer(window_size, charact_file_length, charact_file_name, ip_client, path_name, trffic_name)
+    analizator.PaketsAnalyz(pakets)
+
+    generator.PrintGarafAnomaly()
+
+    return generator.counts_anomal
 
 
 def main():
-    # time.sleep(7500)
 
     # Парамеры автоэнкодера
-    versia          = "0.8.5.4.0"
-    arhiteche       = {"GRU_1": 13, "GRU_2": 12, "GRU_3": 11, "GRU_4": 10, "GRU_5": 11, "GRU_6": 12, "GRU_7": 13}
-
-    epochs_count    = 5
-    batch_size      = 1000
-    windows_size    = 1000
+    versia          = "0.8.6.2"
+    batch_size      = 100
+    window_size     = 1000
     loss_func       = keras.losses.mse
     max_min_file    = "modeles\\TrafficAnomalyDetector\\" + versia + "\\M&M_traffic_VNAT.csv"
-    model_check     = "modeles\\TrafficAnomalyDetector\\" + versia + "\\Checkpoint\\itter_"
+    model           = "modeles\\TrafficAnomalyDetector\\" + versia + "\\model_TAD_v" + versia
 
     # Тестовый датасет
-    characts_file   = "..\\data\\pcap\\test_dataset\\array_characts.csv"
+    real_anomaly = CreateTestDataset(window_size)
+
+    characts_file   = "F:\\VNAT\\Mytraffic\\youtube_me\\test_dataset\\test_dataset_21.csv"
     feature_range   = (-1, 1)
     caracts_data    = pd.read_csv(characts_file)
     caracts_pd      = caracts_data.drop(["Time_Stamp"], axis=1)
+    caracts_pd      = caracts_pd.drop(["Count_src_is_dst_ports"], axis=1)
     caracts_pd      = caracts_pd.drop(["Dev_size_TCP_paket"], axis=1)
     caracts_pd      = caracts_pd.drop(["Dev_size_UDP_paket"], axis=1)
     caracts_pd      = caracts_pd.drop(["Dev_client_paket_size"], axis=1)
     caracts_pd      = caracts_pd.drop(["Dev_server_paket_size"], axis=1)
-    caracts_pd      = caracts_pd.drop(["RAT_count"], axis=1)
     caracts_numpy   = TrainingDatasetGen.normalization(caracts_pd, max_min_file, feature_range).to_numpy()
 
-    numbs_count, caracts_count  = caracts_numpy.shape
-    batch_count                 = round(numbs_count/windows_size) - 1
-    caracts_numpy               = caracts_numpy[:batch_count*windows_size]
-    tensor_dataset              = tf.convert_to_tensor(caracts_numpy)
-    tensor_dataset              = tf.reshape(tensor_dataset, (batch_count, windows_size, caracts_count))
+    numbs_count, caracts_count    = caracts_numpy.shape
+    batch_count                   = round(numbs_count/batch_size) - 11
 
     # Определение автоэнкодера
-    autoencoder = Autoencoder(caracts_count, arhiteche, batch_size=batch_size, windows_size=windows_size)
-    autoencoder.build((1, windows_size, caracts_count))
-    autoencoder.summary()
-    autoencoder.compile(optimizer="adam", loss=loss_func)
-    print("Автоэнкодер определён.")
+    autoencoder = tf.keras.models.load_model(model)
+    print("Модель загружена")
 
     print("Начинаем прогнозирование аномального трафика.")
     metrics_analiz = {}
-    for epoch in range(1, epochs_count+1, 1):
-        print(f"Тестируем модель: {versia}, эпоха: {epoch}")
 
-        metrics_analiz["loss_epoch"+str(epoch)] = []
-        autoencoder.load_weights(model_check + str(epoch))
+    valid_metrics_name = ["Расхождение"]
+    progress_bar = Progbar(batch_count, stateful_metrics=valid_metrics_name)
 
-        valid_metrics_name = ["Расхождение"]
-        progress_bar = Progbar(batch_count, stateful_metrics=valid_metrics_name)
-
-        for idx in range(batch_count):
-            batch_x = tf.gather(tensor_dataset, idx, axis=0)
-            batch_x = tf.reshape(batch_x, (1, windows_size, caracts_count))
+    for idx in range(0, batch_count, 1):
+        batch_x = []
+        for i in range(batch_size):
+            batch_x.append(caracts_numpy[i + (idx * batch_size):window_size + i + (idx * batch_size)])
+        try:
+            batch_x = tf.convert_to_tensor(batch_x)
+            # batch_x = tf.reshape(batch_x, (1, windows_size, caracts_count))
             batch_x_restored = autoencoder.predict(batch_x, verbose=0)
 
             loss = loss_func(batch_x, batch_x_restored)
-            loss = np.mean(np.array(loss)[0]) * 100
-            metrics_analiz["loss_epoch"+str(epoch)].append(loss)
-            values = [("Расхождение", loss)]
+            loss = tf.math.reduce_mean(loss, 1)
+            if idx == 0:
+                metrics_analiz["loss"] = loss
+            else:
+                metrics_analiz["loss"] = tf.concat([metrics_analiz["loss"], loss], axis=0)
+            mean_loss = tf.math.multiply(tf.math.reduce_mean(loss), tf.constant(100, dtype=tf.float32))
+            values = [("Расхождение", mean_loss)]
             progress_bar.add(1, values=values)
+        except Exception as err:
+            logging.exception(f"Ошибка!\n{err}")
+            print(np.array(batch_x).shape)
+            continue
 
-        metrics_analiz["loss_epoch"+str(epoch)] = savgol_filter(metrics_analiz["loss_epoch"+str(epoch)], 31, 3)
-
-    print("Посчитываем реальный аномальный трафик.")
-    array_characts = caracts_data.to_dict("records")[:batch_count*windows_size]
-    metrics_analiz["real_loss"] = []
-    for idx in range(0, batch_count*windows_size, windows_size):
-        ch_srez = array_characts[idx:idx + windows_size]
-        RAT_count_sum = 0
-        for ch in ch_srez:
-            RAT_count_sum += int(ch["RAT_count"])
-        RAT_count_mean = RAT_count_sum / windows_size
-        metrics_analiz["real_loss"].append(RAT_count_mean)
-    metrics_analiz["real_loss"] = savgol_filter(metrics_analiz["real_loss"], 31, 3)
+        metrics_analiz["loss"] = \
+            savgol_filter(np.array(metrics_analiz["loss"]), 31, 3)
 
     metrics_analiz_pd = TrainingDatasetGen.normalization(pd.DataFrame(metrics_analiz), feature_range=(0, 100))
     metrics_analiz_norm = metrics_analiz_pd.to_dict("list")
@@ -91,19 +124,19 @@ def main():
     mng = plt.get_current_fig_manager()
     mng.window.showMaximized()
 
-    for epoch in range(1, epochs_count + 1, 1):
-        plt.xlim([-5.0, 1210.0])
-        plt.ylim([-5.0, 105.0])
-        plt.title(f"Ошибки восстановления на эпохе {epoch}, версия: {versia}")
-        plt.grid(which='major')
-        plt.grid(which='minor', linestyle=':')
+    len_metrix = len(metrics_analiz_norm["loss"])
+    plt.xlim([-5.0, len_metrix + 5])
+    plt.ylim([-5.0, 105.0])
+    plt.title(f"График аномалий в сетевом трафике")   #, версия: {versia}
+    plt.grid(which='major')
+    plt.grid(which='minor', linestyle=':')
 
-        plt.plot(metrics_analiz_norm["real_loss"], label="Реальные аномалии", color="tab:red")
-        plt.plot(metrics_analiz_norm["loss_epoch" + str(epoch)], label="Обнаруженные аномалии", color="tab:blue")
+    plt.plot(real_anomaly, label="Реальные аномалии", color="tab:red")
+    plt.plot(metrics_analiz_norm["loss"], label="Обнаруженные аномалии", color="tab:blue")
 
-        plt.legend(fontsize=10)
-        plt.tight_layout()
-        plt.show()
+    plt.legend(fontsize=10)
+    plt.tight_layout()
+    plt.show()
 
 
 if __name__ == '__main__':
