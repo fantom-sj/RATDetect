@@ -5,8 +5,8 @@ from keras.utils import Progbar
 from ipaddress import IPv4Address
 
 from AutoEncoder_RNN import TrainingDatasetGen
-from SnifferPaket.StreamingTrafficAnalyzer import Analyzer
-from SnifferPaket.TestDatasetCreate import TrafficTestGen, sequence, increasingly, random, descending
+from NTCaASys.StreamingTrafficAnalyzer import AnalyzerPackets
+from NTCaASys.TestDatasetCreate import TrafficTestGen, sequence, increasingly, random, descending
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -47,7 +47,7 @@ def CreateTestDataset(window_size):
     pakets = generator.MixPakets(paradigma)
     print(f"Получен массив из {len(pakets)} сетевых пакетов")
 
-    analizator = Analyzer(window_size, charact_file_length, charact_file_name, ip_client, path_name, trffic_name)
+    analizator = AnalyzerPackets(window_size, charact_file_length, charact_file_name, ip_client, path_name, trffic_name)
     analizator.PaketsAnalyz(pakets)
 
     generator.PrintGarafAnomaly()
@@ -58,7 +58,7 @@ def CreateTestDataset(window_size):
 def main():
 
     # Парамеры автоэнкодера
-    versia          = "0.8.6.2"
+    versia          = "0.8.7.1"
     batch_size      = 100
     window_size     = 1000
     loss_func       = keras.losses.mse

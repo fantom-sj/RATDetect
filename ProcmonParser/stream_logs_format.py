@@ -3,11 +3,11 @@ from io import BytesIO
 from struct import Struct
 from ipaddress import IPv4Address, IPv6Address
 
-from procmon_parser.consts import EventClass, EventClassOperation
-from procmon_parser.logs import PMLStructReader, Module, Process, Event, PMLError
-from procmon_parser.stream_helper import read_u8, read_u16, read_u32, read_u64, read_utf16, read_filetime, \
+from ProcmonParser.consts import EventClass, EventClassOperation
+from ProcmonParser.logs import PMLStructReader, Module, Process, Event, PMLError
+from ProcmonParser.stream_helper import read_u8, read_u16, read_u32, read_u64, read_utf16, read_filetime, \
     get_pvoid_reader, get_pvoid_size
-from procmon_parser.stream_logs_detail_format import PmlMetadata, get_event_details
+from ProcmonParser.stream_logs_detail_format import PmlMetadata, get_event_details
 
 
 class Header(object):
@@ -263,7 +263,7 @@ class PMLStreamReader(PMLStructReader):
         if is_ipv4:
             return str(IPv4Address(hostname_ip[:4]))
 
-        # remove leading zeroes in ipv6 like EventLogParserPML does...
+        # remove leading zeroes in ipv6 like PELaASys does...
         return ':'.join(['{:x}'.format(int(i, 16)) for i in IPv6Address(hostname_ip).exploded.split(':')])
 
     def __port_idx(self, port, is_tcp):

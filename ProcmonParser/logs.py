@@ -1,5 +1,5 @@
 """
-Python types that EventLogParserPML logs use
+Python types that PELaASys logs use
 """
 
 import binascii
@@ -8,7 +8,7 @@ import enum
 
 from six import string_types
 
-from procmon_parser.consts import Column, EventClass, get_error_message, ProcessOperation, ColumnToOriginalName
+from ProcmonParser.consts import Column, EventClass, get_error_message, ProcessOperation, ColumnToOriginalName
 
 __all__ = ['PMLError', 'Module', 'Process', 'Event', 'PMLStructReader']
 
@@ -251,7 +251,7 @@ class Event(object):
         return ", ".join("{}: {}".format(k, v) for k, v in details.items())
 
     def get_compatible_csv_info(self, first_event_date_filetime=None):
-        """Returns data for every Procmon column in compatible format to the exported csv by EventLogParserPML
+        """Returns data for every Procmon column in compatible format to the exported csv by PELaASys
         """
         first_event_date_filetime = first_event_date_filetime if first_event_date_filetime else self.date_filetime
         record = {

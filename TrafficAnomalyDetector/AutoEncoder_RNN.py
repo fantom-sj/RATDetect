@@ -6,7 +6,7 @@
 import tensorflow as tf
 from tensorflow import keras
 from keras import Model
-from keras.layers import GRU, LSTM
+from keras.layers import GRU, LSTM, ConvLSTM1D
 from keras.utils import Progbar
 
 from pathlib import Path
@@ -34,14 +34,15 @@ class Autoencoder(Model):
 
         self.encdec = []
         for layer in arhiteche:
+            units, input_size = arhiteche[layer]
             if "GRU" in layer:
                 self.encdec.append(
                     GRU(
-                        units=arhiteche[layer],
+                        units=units,
                         activation="tanh",
                         return_sequences=True,
-                        name="layer_t." + layer + "_a." + str(arhiteche[layer]),
-                        input_shape=(self.window_size, arhiteche[layer]),
+                        name=f"layer_t.{layer}_type.{units}_to_{input_size}",
+                        input_shape=(self.window_size, input_size),
                         # dropout=0.2
                         # stateful=True,
                         return_state=True
@@ -50,11 +51,11 @@ class Autoencoder(Model):
             elif "LSTM" in layer:
                 self.encdec.append(
                     LSTM(
-                        units=arhiteche[layer],
+                        units=units,
                         activation="tanh",
                         return_sequences=True,
-                        name="layer_t." + layer + "_a." + str(arhiteche[layer]),
-                        input_shape=(self.window_size, arhiteche[layer]),
+                        name=f"layer_t.{layer}_type.{units}_to_{input_size}",
+                        input_shape=(self.window_size, input_size),
                         # dropout=0.2
                         # stateful=True,
                         return_state=True
@@ -184,12 +185,11 @@ class Autoencoder(Model):
 
     def call(self, input_features):
         x = input_features
+        # print("\n")
         state = None
         for layer in self.encdec:
-            # if "GRU_4" in layer.name:
-            #     x, state = layer(x, initial_state=state)
-            # else:
-             x, state = layer(x)
+            x, state = layer(x)
+            # print(f"{layer.name}: {tf.shape(x)}")
         return x
 
     @property
@@ -360,7 +360,8 @@ if __name__ == '__main__':
     # time.sleep(9000)
     print("Запускаем обучение!")
 
-    arhiteche = {"GRU_1": 15, "GRU_2": 14, "GRU_3": 13, "GRU_4": 12, "GRU_5": 13, "GRU_6": 14, "GRU_7": 15}
-    versia = "0.8.6.2"
+    arhiteche = {"GRU_1": (14, 15), "GRU_2": (13, 14), "GRU_3": (12, 13), "GRU_4": (11, 12),
+                 "GRU_5": (12, 11), "GRU_6": (13, 12), "GRU_7": (14, 13), "GRU_8": (15, 14)}
+    versia = "0.8.7.1"
     print("\n\n" + versia)
     main(versia, arhiteche)

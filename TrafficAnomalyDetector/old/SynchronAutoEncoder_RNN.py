@@ -267,7 +267,7 @@ def main():
     epochs              = 1
     shuffle             = True
     loss_func           = keras.losses.mse
-    path_model          = "modeles\\SunchronTrafficAnomalyDetector\\"
+    path_model          = "../modeles/SunchronTrafficAnomalyDetector\\"
     versia              = "0.2"
     model_name          = path_model + "model_STAD_v" + versia
     max_min_file        = path_model + "M&M_traffic_VNAT.csv"

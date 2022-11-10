@@ -4,8 +4,8 @@
     дополнительные метрики, характеризующие каждый из выделенных потоков данных.
 """
 
-from TrafficSniffer import GetNumberIface, __SniffPackets
-from characts import CHARACTERISTIC
+from TrafficSniffer_final import GetNumberIface, __SniffPackets
+from TrafficСharacts import CHARACTERISTIC
 
 from collections import Counter
 from ipaddress import IPv4Address, ip_address, IPv6Address
@@ -534,7 +534,7 @@ def main(config_parametrs, sniffer_home, ip_client, characts_file, rejim):
 
     if rejim == 4:
         print("Запускаем запускаем смешивание трафика RAT и NoRAT!")
-        dir = "..\\data\\pcap\\"
+        dir = "../../data/pcap\\"
 
         RAT_file = []
         NoRAT_file = []

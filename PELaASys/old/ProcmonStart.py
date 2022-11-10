@@ -1,4 +1,4 @@
-from procmon_parser import load_configuration, dump_configuration, Rule
+from ProcmonParser import load_configuration, dump_configuration, Rule
 from threading import Thread
 import subprocess as sp
 
@@ -18,14 +18,14 @@ def __StartConvertInCsv(index_csv):
 
 
 def StartParse(proc_pid=-1, index_parce=0, time=-1):
-    with open('ProcmonConfiguration.pmc', 'rb') as f:
+    with open('../ProcmonConfiguration.pmc', 'rb') as f:
         config = load_configuration(f)
 
     rule = [Rule('PID', 'is', str(proc_pid), 'include')]
     config["FilterRules"] = rule
     config["DestructiveFilter"] = 1
 
-    with open('ProcmonConfiguration.pmc', 'wb') as file:
+    with open('../ProcmonConfiguration.pmc', 'wb') as file:
         dump_configuration(config, file)
 
     th_log = Thread(target=__StartProcmon, args=(index_parce, time,))

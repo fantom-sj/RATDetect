@@ -1,11 +1,7 @@
-import logging
 import pandas as pd
 
-from pathlib import Path
 from ipaddress import IPv4Address
 import matplotlib.pyplot as plt
-
-from SnifferPaket.TrafficParcNDPI import CulcCharactsOnWindow, ParsePcapng
 
 
 def main():

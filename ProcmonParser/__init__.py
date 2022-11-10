@@ -1,10 +1,10 @@
 from six import PY2
 
-from procmon_parser.configuration import *
-from procmon_parser.configuration_format import load_configuration, loads_configuration, dump_configuration, \
+from ProcmonParser.configuration import *
+from ProcmonParser.configuration_format import load_configuration, loads_configuration, dump_configuration, \
     dumps_configuration
-from procmon_parser.logs import *
-from procmon_parser.stream_logs_format import PMLStreamReader
+from ProcmonParser.logs import *
+from ProcmonParser.stream_logs_format import PMLStreamReader
 
 __all__ = [
     'ProcmonLogsReader', 'load_configuration', 'loads_configuration', 'dump_configuration', 'dumps_configuration',
@@ -13,7 +13,7 @@ __all__ = [
 
 
 class ProcmonLogsReader(object):
-    """Reads EventLogParserPML logs from a stream which in the PML format
+    """Reads PELaASys logs from a stream which in the PML format
     """
 
     def __init__(self, f, should_get_stacktrace=True, should_get_details=True):

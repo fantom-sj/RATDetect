@@ -1,16 +1,16 @@
 """
-Python types that EventLogParserPML configuration uses
+Python types that PELaASys configuration uses
 """
 
 from six import string_types
 
-from procmon_parser.consts import Column, RuleAction, RuleRelation
+from ProcmonParser.consts import Column, RuleAction, RuleRelation
 
 __all__ = ['Column', 'RuleAction', 'RuleRelation', 'Rule', 'Font']
 
 
 class Rule(object):
-    """A rule that can be used to filter EventLogParserPML events.
+    """A rule that can be used to filter PELaASys events.
     """
 
     def __init__(self, column=Column.ARCHITECTURE, relation=RuleRelation.IS, value="64-bit", action=RuleAction.INCLUDE):
@@ -41,7 +41,7 @@ class Rule(object):
 
 
 class Font(object):
-    """A font attributes for EventLogParserPML, like in LOGFONTW structure
+    """A font attributes for PELaASys, like in LOGFONTW structure
     see https://docs.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-logfontw for documentation
     """
 

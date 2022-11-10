@@ -2,14 +2,14 @@ from collections import namedtuple
 from io import BytesIO
 from struct import error, unpack
 
-from procmon_parser.consts import EventClass, ProcessOperation, RegistryOperation, FilesystemOperation, \
+from ProcmonParser.consts import EventClass, ProcessOperation, RegistryOperation, FilesystemOperation, \
     FilesystemSubOperations, FilesysemDirectoryControlOperation, RegistryTypes, RegistryKeyValueInformationClass, \
     RegistryKeyInformationClass, get_registry_access_mask_string, RegistryDisposition, RegistryKeySetInformationClass, \
     FilesystemQueryInformationOperation, get_filesystem_access_mask_string, FilesystemDisposition, \
     get_filesysyem_create_options, get_filesysyem_create_attributes, get_filesysyem_create_share_mode, \
     FilesystemOpenResult, get_filesysyem_io_flags, FilesystemPriority, get_ioctl_name, FileInformationClass, \
     get_filesysyem_notify_change_flags, FilesystemSetInformationOperation
-from procmon_parser.stream_helper import read_u8, read_u16, read_u32, read_utf16, read_duration, \
+from ProcmonParser.stream_helper import read_u8, read_u16, read_u32, read_utf16, read_duration, \
     read_utf16_multisz, read_u64, read_filetime, read_s64
 
 PmlMetadata = namedtuple('PmlMetadata', ['str_idx', 'process_idx', 'hostname_idx', 'port_idx', 'read_pvoid',

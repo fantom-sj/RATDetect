@@ -1,9 +1,9 @@
 import tensorflow as tf
 from tensorflow import keras
 from keras.utils import Progbar
-from SnifferPaket.TrafficParcNDPI import PreprocessingPcapng
+from NTCaASys.old.TrafficParcNDPI_final import PreprocessingPcapng
 from pathlib import Path
-from SnifferPaket.characts import CHARACTERISTIC
+from NTCaASys.TrafficСharacts import CHARACTERISTIC
 import pylab
 
 import pandas as pd
@@ -56,8 +56,8 @@ def normalization(pd_data, max_min_pd):
 
 
 def main():
-    max_min_file = "modeles\\SunchronTrafficAnomalyDetector\\M&M_traffic_VNAT.csv"
-    characts_file = "..\\data\\pcap\\test_dataset\\array_characts.csv"
+    max_min_file = "../modeles/SunchronTrafficAnomalyDetector/M&M_traffic_VNAT.csv"
+    characts_file = "../../data/pcap/test_dataset/array_characts.csv"
     windows_size = 500
 
     model_name = "modeles\\SunchronTrafficAnomalyDetector\\model_STAD_v0.1_e1"

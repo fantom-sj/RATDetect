@@ -1,8 +1,8 @@
 /data/
-/EventLogParserPML/log_csv/
-/EventLogParserPML/log_pml/
-/SnifferPaket/dist/
-/SnifferPaket/Wireshark/
+/PELaASys/log_csv/
+/PELaASys/log_pml/
+/NTCaASys/dist/
+/NTCaASys/Wireshark/
 /TrafficAnomalyDetector/model_Dense/
 /TrafficAnomalyDetector/model_GRU_e1/
 /TrafficAnomalyDetector/model_GRU_e10/

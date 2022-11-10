@@ -7,8 +7,8 @@ from io import BytesIO
 from construct import Struct, Int8ul, Int16ul, Int32ul, Bytes, PaddedString, Array, Const, Switch, Tell, Adapter, \
     Rebuild, Default, Pointer, StreamError
 
-from procmon_parser.configuration import Column, RuleAction, RuleRelation, Rule, Font
-from procmon_parser.construct_helper import OriginalEnumAdapter, FixedUTF16String, FixedUTF16CString, FixedArray, \
+from ProcmonParser.configuration import Column, RuleAction, RuleRelation, Rule, Font
+from ProcmonParser.construct_helper import OriginalEnumAdapter, FixedUTF16String, FixedUTF16CString, FixedArray, \
     FixedBytes, CheckCustom
 
 # ===============================================================================
@@ -99,7 +99,7 @@ class RuleStructAdapter(Adapter):
 RuleStruct = RuleStructAdapter(RawRuleStruct)
 
 RawRulesStruct = """
-Struct that contains a list of EventLogParserPML rules.
+Struct that contains a list of PELaASys rules.
 """ * Struct(
     "reserved1" / Const(1, Int8ul) * "!!Unknown field!!",
     "rules_count" / Rebuild(Int8ul, lambda this: len(this.rules)),
@@ -118,7 +118,7 @@ class RulesStructAdapter(Adapter):
 
 RulesStruct = RulesStructAdapter(RawRulesStruct)
 RawRecordStruct = """
-Struct that contains generic EventLogParserPML configuration option.
+Struct that contains generic PELaASys configuration option.
 """ * Struct(
     "record_size_offset" / Tell,  # NOT IN THE REAL FORMAT - USED FOR BUILDING ONLY
     "record_size" / Default(Int32ul, 0x10),
@@ -210,7 +210,7 @@ def loads_configuration(data):
 
 
 def dump_configuration(records, stream):
-    """Serialize ``records``, a dictionary of EventLogParserPML configuration records, to ``stream`` (a
+    """Serialize ``records``, a dictionary of PELaASys configuration records, to ``stream`` (a
     ``.write()``-supporting file-like object that returns the length written (for python2 use the io module)),
     in the format of PMC.
     """
@@ -219,7 +219,7 @@ def dump_configuration(records, stream):
 
 
 def dumps_configuration(records):
-    """Serialize ``records``, a dictionary of EventLogParserPML configuration records, to ``bytes`` in the format of PMC.
+    """Serialize ``records``, a dictionary of PELaASys configuration records, to ``bytes`` in the format of PMC.
     """
     stream = BytesIO()
     dump_configuration(records, stream)

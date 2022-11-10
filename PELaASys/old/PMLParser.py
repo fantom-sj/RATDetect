@@ -1,6 +1,6 @@
-from procmon_parser import Event
-from procmon_parser import ProcmonLogsReader
-from procmon_parser.consts import ColumnToOriginalName, Column, EventClass
+from ProcmonParser import Event
+from ProcmonParser import ProcmonLogsReader
+from ProcmonParser.consts import ColumnToOriginalName, Column, EventClass
 
 
 class ParserEventInPML:
@@ -84,7 +84,7 @@ class ParserEventInPML:
 
 
 def main():
-    pml_file_name = "log_pml\\Log2.pml"
+    pml_file_name = "../log_pml/Log2.PML"
     parser_pml = ParserEventInPML(pml_file_name)
     events = parser_pml.GetEvents()
 

@@ -1,5 +1,5 @@
 from ipaddress import IPv4Address, ip_address, IPv6Address
-from SnifferPaket.characts import CulcCharactsOnWindow, CHARACTERISTIC
+from NTCaASys.TrafficСharacts import CulcCharactsOnWindow, CHARACTERISTIC
 from threading import Thread
 from pathlib import Path
 
@@ -114,7 +114,7 @@ class Sniffer:
 
                 self.last_file_id += 1
             except Exception as err:
-                print("Ошибка во время снифинга! %s" % str(err))
+                print("Ошибка во время снифинга трафика! %s" % str(err))
                 continue
 
     def run(self):
@@ -139,7 +139,7 @@ class Sniffer:
         self.run_sniff = False
 
 
-class Analyzer:
+class AnalyzerPackets:
     def __init__(self, window_size, charact_file_length, charact_file_mask, ip_client, path_name, trffic_name):
         self.window_size            = window_size
         self.charact_file_length    = charact_file_length
