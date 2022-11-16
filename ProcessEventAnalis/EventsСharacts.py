@@ -9,45 +9,47 @@ from ProcmonParser.consts import EventClass
 
 CHARACTERISTIC_EVENTS = [
     "Time_Stamp",               # 0.  Временная метка пакета, с приходом которого были рассчитаны характеристики
+    "Process_name",             # 1.  Имя процесса, описываемого набором заданных характеристик
 
-    "Count_event_Process",      # 1.  Количество событий типа Process +
-    "Count_event_Registry",     # 2.  Количество событий типа Registry +
-    "Count_event_File_System",  # 3.  Количество событий типа File_System +
-    "Count_event_Profiling",    # 4.  Количество событий типа Profiling +
-    "Count_event_Network",      # 5.  Количество событий типа Network +
-    "Count_event_Unknown",      # 6.  Количество событий типа Unknown +
-    "Count_success_events",     # 7.  Количество успешно завершённых событий в заданном промежутке +
+    "Count_event_Process",      # 1.  Количество событий типа Process
+    "Count_event_Registry",     # 2.  Количество событий типа Registry
+    "Count_event_File_System",  # 3.  Количество событий типа File_System
+    "Count_event_Profiling",    # 4.  Количество событий типа Profiling
+    "Count_event_Network",      # 5.  Количество событий типа Network
+    "Count_event_Unknown",      # 6.  Количество событий типа Unknown
+    "Count_success_events",     # 7.  Количество успешно завершённых событий в заданном промежутке
 
-    "Access_to_system32",       # 8.  Количество событий с попыткой доступа к папке Windows/system32 +
-    "Access_to_ProgramData",    # 9.  Количество событий с попыткой доступа к папке ProgramData +
-    "Access_to_ProgramFiles",   # 10. Количество событий с попыткой доступа к папке ProgramFiles +
-    "Access_to_UserDir",        # 11. Количество событий с попыткой доступа к домашней папке пользователя +
-    "Access_to_other",          # 12. Количество событий с попыткой доступа к остальным папкам +
+    "Access_to_system32",       # 8.  Количество событий с попыткой доступа к папке Windows/system32
+    "Access_to_ProgramData",    # 9.  Количество событий с попыткой доступа к папке ProgramData
+    "Access_to_ProgramFiles",   # 10. Количество событий с попыткой доступа к папке ProgramFiles
+    "Access_to_UserDir",        # 11. Количество событий с попыткой доступа к домашней папке пользователя
+    "Access_to_other",          # 12. Количество событий с попыткой доступа к остальным папкам
 
-    "Count_net_Connect",        # 13. Количество инициированных сетевых соединений +
-    "Count_net_Disconnect",     # 14. Количество завершённых сетевых соединений +
-    "Count_net_Send",           # 15. Количество сетевых отправлений +
-    "Count_net_Receive",        # 16. Количество сетевых приёмов +
-    "Ratio_TCP_on_UDP",         # 17. Соотношение количества TCP операций к UDP +
+    "Count_net_Connect",        # 13. Количество инициированных сетевых соединений
+    "Count_net_Disconnect",     # 14. Количество завершённых сетевых соединений
+    "Count_net_Send",           # 15. Количество сетевых отправлений
+    "Count_net_Receive",        # 16. Количество сетевых приёмов
+    "Ratio_TCP_on_UDP",         # 17. Соотношение количества TCP операций к UDP
 
-    "Count_create_thread",      # 18. Количество созданных потоков +
-    "Count_exit_thread",        # 19. Количество выходов из потоков +
+    "Count_create_thread",      # 18. Количество созданных потоков
+    "Count_exit_thread",        # 19. Количество выходов из потоков
 
-    "Access_reg_HKCR",          # 20. Количество обращений в ветке реестра HKCR +
-    "Access_reg_HKCU",          # 21. Количество обращений в ветке реестра HKCU +
-    "Access_reg_HKLM",          # 22. Количество обращений в ветке реестра HKLM +
-    "Access_reg_HKU",           # 23. Количество обращений в ветке реестра HKU +
-    "Access_reg_HKCC",          # 24. Количество обращений в ветке реестра HKCC +
+    "Access_reg_HKCR",          # 20. Количество обращений в ветке реестра HKCR
+    "Access_reg_HKCU",          # 21. Количество обращений в ветке реестра HKCU
+    "Access_reg_HKLM",          # 22. Количество обращений в ветке реестра HKLM
+    "Access_reg_HKU",           # 23. Количество обращений в ветке реестра HKU
+    "Access_reg_HKCC",          # 24. Количество обращений в ветке реестра HKCC
 
-    "Ratio_files_on_reg",       # 25. Соотношение количества запросов на доступ к файлам по отношению к реестру +
-    "Ratoi_read_on_write_file", # 26. Соотношение количества операция чтения к записи файлов +
-    "Ratoi_read_on_write_reg",  # 27. Соотношение количества операция чтения к записи в реестре +
+    "Ratio_files_on_reg",       # 25. Соотношение количества запросов на доступ к файлам по отношению к реестру
+    "Ratoi_read_on_write_file", # 26. Соотношение количества операция чтения к записи файлов
+    "Ratoi_read_on_write_reg",  # 27. Соотношение количества операция чтения к записи в реестре
     "Ratoi_read_on_write_data", # 28. Соотношение количества прочитанных данных к записанным данным на диск
 ]
 
 
 def CulcCharactsEventsOnWindow(events, window_size):
-    Time_Stamp = events[-1]["Date & Time"]
+    Time_Stamp              = events[-1]["Date & Time"]
+    Process_name            = events[-1]["Process Name"]
 
     Count_event_Process     = 0
     Count_event_Registry    = 0
@@ -204,34 +206,35 @@ def CulcCharactsEventsOnWindow(events, window_size):
         Ratoi_read_on_write_data = 1
 
     characts = {
-        "Time_Stamp": Time_Stamp,
-        "Count_event_Process": Count_event_Process,
-        "Count_event_Registry": Count_event_Registry,
-        "Count_event_File_System": Count_event_File_System,
-        "Count_event_Profiling": Count_event_Profiling,
-        "Count_event_Network": Count_event_Network,
-        "Count_event_Unknown": Count_event_Unknown,
-        "Count_success_events": Count_success_events,
-        "Access_to_system32": Access_to_system32,
-        "Access_to_ProgramData": Access_to_ProgramData,
-        "Access_to_ProgramFiles": Access_to_ProgramFiles,
-        "Access_to_UserDir": Access_to_UserDir,
-        "Access_to_other": Access_to_other,
-        "Count_net_Connect": Count_net_Connect,
-        "Count_net_Disconnect": Count_net_Disconnect,
-        "Count_net_Send": Count_net_Send,
-        "Count_net_Receive": Count_net_Receive,
-        "Ratio_TCP_on_UDP": Ratio_TCP_on_UDP,
-        "Count_create_thread": Count_create_thread,
-        "Count_exit_thread": Count_exit_thread,
-        "Access_reg_HKCR": Access_reg_HKCR,
-        "Access_reg_HKCU": Access_reg_HKCU,
-        "Access_reg_HKLM": Access_reg_HKLM,
-        "Access_reg_HKU": Access_reg_HKU,
-        "Access_reg_HKCC": Access_reg_HKCC,
-        "Ratio_files_on_reg": Ratio_files_on_reg,
+        "Time_Stamp":               Time_Stamp,
+        "Process_name":             Process_name,
+        "Count_event_Process":      Count_event_Process,
+        "Count_event_Registry":     Count_event_Registry,
+        "Count_event_File_System":  Count_event_File_System,
+        "Count_event_Profiling":    Count_event_Profiling,
+        "Count_event_Network":      Count_event_Network,
+        "Count_event_Unknown":      Count_event_Unknown,
+        "Count_success_events":     Count_success_events,
+        "Access_to_system32":       Access_to_system32,
+        "Access_to_ProgramData":    Access_to_ProgramData,
+        "Access_to_ProgramFiles":   Access_to_ProgramFiles,
+        "Access_to_UserDir":        Access_to_UserDir,
+        "Access_to_other":          Access_to_other,
+        "Count_net_Connect":        Count_net_Connect,
+        "Count_net_Disconnect":     Count_net_Disconnect,
+        "Count_net_Send":           Count_net_Send,
+        "Count_net_Receive":        Count_net_Receive,
+        "Ratio_TCP_on_UDP":         Ratio_TCP_on_UDP,
+        "Count_create_thread":      Count_create_thread,
+        "Count_exit_thread":        Count_exit_thread,
+        "Access_reg_HKCR":          Access_reg_HKCR,
+        "Access_reg_HKCU":          Access_reg_HKCU,
+        "Access_reg_HKLM":          Access_reg_HKLM,
+        "Access_reg_HKU":           Access_reg_HKU,
+        "Access_reg_HKCC":          Access_reg_HKCC,
+        "Ratio_files_on_reg":       Ratio_files_on_reg,
         "Ratoi_read_on_write_file": Ratoi_read_on_write_file,
-        "Ratoi_read_on_write_reg": Ratoi_read_on_write_reg,
+        "Ratoi_read_on_write_reg":  Ratoi_read_on_write_reg,
         "Ratoi_read_on_write_data": Ratoi_read_on_write_data
     }
 
