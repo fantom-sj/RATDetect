@@ -23,7 +23,8 @@ class AnalyzerEvents:
         self.path_name              = path_name
 
         self.files_events_arr       = []
-        self.array_events_global     = []
+        self.array_events_global    = []
+        self.process_arr            = []
 
         self.run_analyz             = True
         self.th_main_analyz         = None
@@ -108,27 +109,32 @@ class AnalyzerEvents:
             file_only_name = pml_file_name.split("\\")[-1]
             Path(pml_file_name).rename(path_new + "\\" + file_only_name)
 
-        array_characts = []
+        array_characts  = []
+        event_in_window = {}
         try:
-            while len(self.array_events_global) >= self.window_size:
-                array_pkt = self.array_events_global[:self.window_size]
-                ch = CulcCharactsEventsOnWindow(array_pkt, self.window_size)
-                if ch is not None:
-                    array_characts.append(ch)
-                else:
-                    continue
+            while len(self.array_events_global) > 0:
+                event = self.array_events_global[0]
+                if not event["Process Name"] in event_in_window:
+                    event_in_window[event["Process Name"]] = []
+
+                event_in_window[event["Process Name"]].append(event)
                 self.array_events_global.pop(0)
-                # for i in range(self.window_size):
-                #     self.array_events_global.pop(0)
+
+                for process in event_in_window:
+                    if len(event_in_window[process]) == window_size:
+                        ch = CulcCharactsEventsOnWindow(event_in_window[process], self.window_size)
+                        if ch is not None:
+                            array_characts.append(ch)
+                        event_in_window[process].pop(0)
 
         except Exception as err:
             logging.exception(f"Ошибка!\n{err}")
-            return False
+            return {}
 
-        print("Выявлено характеристик: %d" % len(array_characts))
+        print(f"Выявлены {len(array_characts)} характеристики событий процессов")
 
         if len(array_characts) == 0:
-            print("Не выделено ни одного набора характеристик!")
+            print("Не выявлено ни одного набора характеристик!")
             return False
         else:
             try:
@@ -136,9 +142,10 @@ class AnalyzerEvents:
                                      self.charact_file_mask + str(self.index_charact_file) + ".csv"
 
                 pd_characts_old = pd.read_csv(characts_file_name)
-                pd_characts = pd.DataFrame(array_characts)
+                pd_characts     = pd.DataFrame(array_characts)
+                pd_characts     = pd_characts.sort_values(by="Time_Stamp")
+                pd_characts_new = pd.concat([pd_characts_old, pd_characts])
 
-                pd_characts_new = pd.concat([pd_characts_old, pd_characts], ignore_index=False)
                 pd_characts_arr = []
                 num_chunks = math.ceil(len(pd_characts_new) / self.charact_file_length)
                 for i in range(num_chunks):
@@ -152,10 +159,11 @@ class AnalyzerEvents:
                     pd_characts_arr[1].to_csv(characts_file_name, index=False)
 
                 print("Парсинг завершился!")
-                return True
+
             except Exception as err:
                 logging.exception(f"Ошибка!\n{err}")
-                return False
+
+            return array_characts
 
     def AnalyzLoop(self):
 
@@ -195,7 +203,7 @@ if __name__ == '__main__':
     path_name                   = "F:\\EVENT"
     window_size                 = 500
     charact_file_length         = 1000000
-    charact_file_name           = "test_dataset_"
+    charact_file_name           = "train_dataset_"
 
     analizator = AnalyzerEvents(window_size, charact_file_length,
                                 charact_file_name, events_name, path_name)
