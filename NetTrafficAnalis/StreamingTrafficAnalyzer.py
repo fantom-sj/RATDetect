@@ -1,5 +1,5 @@
 from ipaddress import IPv4Address, ip_address, IPv6Address
-from NTCaASys.TrafficСharacts import CulcCharactsOnWindow, CHARACTERISTIC
+from NetTrafficAnalis.TrafficСharacts import CulcCharactsOnWindow, CHARACTERISTIC
 from threading import Thread
 from pathlib import Path
 
@@ -13,7 +13,7 @@ import math
 import re
 
 
-class Sniffer:
+class SnifferTraffic:
     def __init__(self, size_pcap_length, iface_name, trffic_name, trffic_file_mask, path_name):
         self.size_pcap_length           = size_pcap_length
         self.iface_name                 = iface_name
@@ -154,8 +154,8 @@ class AnalyzerPackets:
         self.run_analyz         = True
         self.th_main_analyz     = None
         self.index_charact_file = 0
-        self.GetLastFileId()
 
+        self.GetLastFileId()
         self.GetFilesTraffic()
 
     def GetFilesTraffic(self):
@@ -414,12 +414,13 @@ if __name__ == '__main__':
     charact_file_name = "dataset_"
     ip_client = [IPv4Address("192.168.10.128")]
 
-    sniffer = Sniffer(size_pcap_length, iface_name, trffic_name, trffic_file_mask, path_name)
+    sniffer = SnifferTraffic(size_pcap_length, iface_name, trffic_name, trffic_file_mask, path_name)
     sniffer.run()
     # time.sleep(200)
     # sniffer.stop()
 
-    # analizator = Analyzer(window_size, charact_file_length, charact_file_name, ip_client, path_name, trffic_name)
+    # analizator = AnalyzerPackets(window_size, charact_file_length,
+    #                              charact_file_name, ip_client, path_name, trffic_name)
     # analizator.run()
 
 

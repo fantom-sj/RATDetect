@@ -1,7 +1,7 @@
 from scipy.signal import savgol_filter
 # from StreamingTrafficAnalyzer import Analyzer
 from ipaddress import IPv4Address
-from NTCaASys.TrafficСharacts import ParseTraffic
+from NetTrafficAnalis.TrafficСharacts import ParseTraffic
 from pathlib import Path
 
 import matplotlib.pyplot as plt
