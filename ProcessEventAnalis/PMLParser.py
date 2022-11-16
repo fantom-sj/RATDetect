@@ -66,7 +66,8 @@ class ParserEvents:
         compatible_record = {ColumnToOriginalName[k]: v for k, v in record.items()}
         return compatible_record
 
-    def GetDetailsEvent(self, event):
+    @staticmethod
+    def GetDetailsEvent(event):
         """
             Возвращает столбец дополнительных сведений о событии в виде словаря
         """
