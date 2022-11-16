@@ -224,7 +224,7 @@ class TrainingDatasetGen(keras.utils.Sequence):
         self.valid_dataset = self.dataset[self.numbs_count:round(len(self.dataset) / batch_size) * batch_size]
 
     @staticmethod
-    def normalization(pd_data, max_min_file, feature_range=(0, 1), mix_max_from_file=False):
+    def normalization(pd_data, max_min_file=None, feature_range=(0, 1), mix_max_from_file=False):
         if mix_max_from_file:
             read_min_max = pd.read_csv(max_min_file)
             data_max     = read_min_max.iloc[0]
@@ -234,7 +234,7 @@ class TrainingDatasetGen(keras.utils.Sequence):
             data_max = pd_data.max()
             data_min = pd_data.min()
 
-        if not mix_max_from_file:
+        if (not mix_max_from_file) and (max_min_file is not None):
             cols_name = []
             for col in pd_data:
                 cols_name.append(col)
