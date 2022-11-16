@@ -77,7 +77,7 @@ def main():
     caracts_pd      = caracts_pd.drop(["Dev_size_UDP_paket"], axis=1)
     caracts_pd      = caracts_pd.drop(["Dev_client_paket_size"], axis=1)
     caracts_pd      = caracts_pd.drop(["Dev_server_paket_size"], axis=1)
-    caracts_numpy   = TrainingDatasetGen.normalization(caracts_pd, max_min_file, feature_range).to_numpy()
+    caracts_numpy   = TrainingDatasetGen.normalization(caracts_pd, max_min_file, feature_range, True).to_numpy()
 
     numbs_count, caracts_count    = caracts_numpy.shape
     batch_count                   = round(numbs_count/batch_size) - 11
