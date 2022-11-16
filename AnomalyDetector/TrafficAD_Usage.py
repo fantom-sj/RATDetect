@@ -5,8 +5,8 @@ from keras.utils import Progbar
 from ipaddress import IPv4Address
 
 from AutoEncoder_RNN import TrainingDatasetGen
-from NTCaASys.StreamingTrafficAnalyzer import AnalyzerPackets
-from NTCaASys.TestDatasetCreate import TrafficTestGen, sequence, increasingly, random, descending
+from NetTrafficAnalis.StreamingTrafficAnalyzer import AnalyzerPackets
+from NetTrafficAnalis.TestDatasetCreate import TrafficTestGen, sequence, increasingly, random, descending
 
 import matplotlib.pyplot as plt
 import pandas as pd
