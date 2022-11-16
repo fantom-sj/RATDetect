@@ -78,7 +78,8 @@ def main():
         metrics_analiz["loss"] = \
             savgol_filter(np.array(metrics_analiz["loss"]), 31, 3)
 
-    metrics_analiz_pd = TrainingDatasetGen.normalization(pd.DataFrame(metrics_analiz), feature_range=(0, 100))
+    metrics_analiz_pd = TrainingDatasetGen.normalization(pd.DataFrame(metrics_analiz), None,
+                                                         feature_range=(0, 100), mix_max_from_file=False)
     metrics_analiz_norm = metrics_analiz_pd.to_dict("list")
 
     mng = plt.get_current_fig_manager()
