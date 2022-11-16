@@ -1,9 +1,9 @@
 from ProcmonParser import Event
 from ProcmonParser import ProcmonLogsReader
 from ProcmonParser.consts import ColumnToOriginalName, Column, EventClass
+from EventsСharacts import CulcCharactsEventsOnWindow
 
-
-class ParserEventInPML:
+class ParserEvents:
     """
         Класс генерации или получения информации обо всех событиях из файла PML,
         являющегося лог файлом программы Procmon.
@@ -17,28 +17,31 @@ class ParserEventInPML:
             Функция получения массива со всеми событиями в файле pml.
             Возвращает массив со словарями описывающими каждое событие
         """
-        pml_readers = ProcmonLogsReader(open(self.pml_file_name, "rb"))
-        events = []
-        for pml_record in pml_readers:
-            try:
-                event = self.GetEventInformation(pml_record)
-                events.append(event)
-            except UnicodeEncodeError:
-                continue
+        with open(self.pml_file_name, "rb") as pml_file:
+            pml_readers = ProcmonLogsReader(pml_file)
+            events = []
+            for pml_record in pml_readers:
+                try:
+                    event = self.GetEventInformation(pml_record)
+                    events.append(event)
+                except UnicodeEncodeError:
+                    continue
         return events
 
     def GenEventIter(self):
         """
             Генератор событий. Возвращает на каждой итерации очередное событие из файла pml в виде словаря.
         """
-        pml_readers = ProcmonLogsReader(open(self.pml_file_name, "rb"))
+        with open(self.pml_file_name, "rb") as pml_file:
+            pml_readers = ProcmonLogsReader(pml_file)
 
-        for pml_record in pml_readers:
-            try:
-                event = self.GetEventInformation(pml_record)
-                yield event
-            except UnicodeEncodeError:
-                continue
+            for pml_record in pml_readers:
+                try:
+                    event = self.GetEventInformation(pml_record)
+                    yield event
+                except UnicodeEncodeError:
+                    continue
+
 
     def GetEventInformation(self, event: Event):
         """
@@ -68,13 +71,13 @@ class ParserEventInPML:
             return dict()
         details = event.details.copy()
         necessary_details = {}
-        if EventClass.Registry == event.event_class:
-            commas_formatted_keys = ["Length", "SubKeys", "Values"]
-            for key in commas_formatted_keys:
-                if key in details:
-                    necessary_details[key] = '{:,}'.format(details[key])
+        # if EventClass.Registry == event.event_class:
+        #     commas_formatted_keys = ["Length", "SubKeys", "Values"]
+        #     for key in commas_formatted_keys:
+        #         if key in details:
+        #             necessary_details[key] = '{:,}'.format(details[key])
 
-        elif EventClass.File_System == event.event_class:
+        if EventClass.File_System == event.event_class:
             commas_formatted_keys = ["AllocationSize", "Offset", "Length"]
             for key in commas_formatted_keys:
                 if key in details and int == type(details[key]):
@@ -84,12 +87,14 @@ class ParserEventInPML:
 
 
 def main():
-    pml_file_name = "../log_pml/Log2.PML"
-    parser_pml = ParserEventInPML(pml_file_name)
+    pml_file_name = "F:\\EVENT\\EventTest\\event_log_8.pml"
+    parser_pml = ParserEvents(pml_file_name)
     events = parser_pml.GetEvents()
 
-    for event in parser_pml.GenEventIter():
-        print(event)
+    window_size = 1000
+
+    for i in range(0, len(events)-window_size, window_size):
+        print(CulcCharactsEventsOnWindow(events[i:i+window_size], window_size))
 
 
 if __name__ == '__main__':
