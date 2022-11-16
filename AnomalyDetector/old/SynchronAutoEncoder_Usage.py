@@ -1,9 +1,9 @@
 import tensorflow as tf
 from tensorflow import keras
 from keras.utils import Progbar
-from NTCaASys.old.TrafficParcNDPI_final import PreprocessingPcapng
+from NetTrafficAnalis.old.TrafficParcNDPI_final import PreprocessingPcapng
 from pathlib import Path
-from NTCaASys.TrafficСharacts import CHARACTERISTIC
+from NetTrafficAnalis.TrafficСharacts import CHARACTERISTIC
 import pylab
 
 import pandas as pd

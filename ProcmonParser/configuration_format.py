@@ -99,7 +99,7 @@ class RuleStructAdapter(Adapter):
 RuleStruct = RuleStructAdapter(RawRuleStruct)
 
 RawRulesStruct = """
-Struct that contains a list of PELaASys rules.
+Struct that contains a list of ProcessEventAnalis rules.
 """ * Struct(
     "reserved1" / Const(1, Int8ul) * "!!Unknown field!!",
     "rules_count" / Rebuild(Int8ul, lambda this: len(this.rules)),
@@ -118,7 +118,7 @@ class RulesStructAdapter(Adapter):
 
 RulesStruct = RulesStructAdapter(RawRulesStruct)
 RawRecordStruct = """
-Struct that contains generic PELaASys configuration option.
+Struct that contains generic ProcessEventAnalis configuration option.
 """ * Struct(
     "record_size_offset" / Tell,  # NOT IN THE REAL FORMAT - USED FOR BUILDING ONLY
     "record_size" / Default(Int32ul, 0x10),
@@ -210,7 +210,7 @@ def loads_configuration(data):
 
 
 def dump_configuration(records, stream):
-    """Serialize ``records``, a dictionary of PELaASys configuration records, to ``stream`` (a
+    """Serialize ``records``, a dictionary of ProcessEventAnalis configuration records, to ``stream`` (a
     ``.write()``-supporting file-like object that returns the length written (for python2 use the io module)),
     in the format of PMC.
     """
@@ -219,7 +219,7 @@ def dump_configuration(records, stream):
 
 
 def dumps_configuration(records):
-    """Serialize ``records``, a dictionary of PELaASys configuration records, to ``bytes`` in the format of PMC.
+    """Serialize ``records``, a dictionary of ProcessEventAnalis configuration records, to ``bytes`` in the format of PMC.
     """
     stream = BytesIO()
     dump_configuration(records, stream)
