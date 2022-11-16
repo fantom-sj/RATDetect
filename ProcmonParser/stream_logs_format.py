@@ -263,7 +263,7 @@ class PMLStreamReader(PMLStructReader):
         if is_ipv4:
             return str(IPv4Address(hostname_ip[:4]))
 
-        # remove leading zeroes in ipv6 like PELaASys does...
+        # remove leading zeroes in ipv6 like ProcessEventAnalis does...
         return ':'.join(['{:x}'.format(int(i, 16)) for i in IPv6Address(hostname_ip).exploded.split(':')])
 
     def __port_idx(self, port, is_tcp):

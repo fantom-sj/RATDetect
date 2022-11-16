@@ -1,5 +1,5 @@
 """
-Python types that PELaASys logs use
+Python types that ProcessEventAnalis logs use
 """
 
 import binascii
@@ -251,7 +251,7 @@ class Event(object):
         return ", ".join("{}: {}".format(k, v) for k, v in details.items())
 
     def get_compatible_csv_info(self, first_event_date_filetime=None):
-        """Returns data for every Procmon column in compatible format to the exported csv by PELaASys
+        """Returns data for every Procmon column in compatible format to the exported csv by ProcessEventAnalis
         """
         first_event_date_filetime = first_event_date_filetime if first_event_date_filetime else self.date_filetime
         record = {

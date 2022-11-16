@@ -3,7 +3,7 @@ import pandas as pd
 from pathlib import Path
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
-from TrafficAnomalyDetector.AutoEncoder_RNN import TrainingDatasetGen
+from AnomalyDetector.AutoEncoder_RNN import TrainingDatasetGen
 
 def SearchNearest(num, arr):
     max = 0
@@ -151,7 +151,7 @@ def main():
 
     versia          = "0.8.6.2"
     path_model      = "D:\\Пользователи\\Admin\\Рабочий стол\\Статья по КБ\\RATDetect\\" \
-                      "TrafficAnomalyDetector\\modeles\\TrafficAnomalyDetector\\" + versia
+                      "AnomalyDetector\\modeles\\AnomalyDetector\\" + versia
     train           = True
     valid           = False
     feature_range   = (0, 100)

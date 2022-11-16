@@ -13,7 +13,7 @@ __all__ = [
 
 
 class ProcmonLogsReader(object):
-    """Reads PELaASys logs from a stream which in the PML format
+    """Reads ProcessEventAnalis logs from a stream which in the PML format
     """
 
     def __init__(self, f, should_get_stacktrace=True, should_get_details=True):
