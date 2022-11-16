@@ -27,7 +27,7 @@ def main(versia, arhiteche):
     path_model          = "modeles\\EventAnomalyDetector\\" + versia + "\\"
     model_name          = path_model + "model_EAD_v" + versia
     max_min_file        = path_model + "M&M_event.csv"
-    dataset             = "F:\\EVENT\\EventTest\\dataset_0.csv"
+    dataset             = "F:\\EVENT\\EventTest\\train_dataset_0.csv"
     history_name        = path_model + "history_train_v" + versia + ".csv"
     history_valid_name  = path_model + "history_valid_v" + versia + ".csv"
 

@@ -13,6 +13,7 @@ import dpkt
 import math
 import re
 
+
 class AnalyzerEvents:
     def __init__(self, window_size, charact_file_length, charact_file_mask, event_name, path_name):
         self.window_size            = window_size
@@ -194,7 +195,7 @@ if __name__ == '__main__':
     path_name                   = "F:\\EVENT"
     window_size                 = 500
     charact_file_length         = 1000000
-    charact_file_name           = "dataset_"
+    charact_file_name           = "test_dataset_"
 
     analizator = AnalyzerEvents(window_size, charact_file_length,
                                 charact_file_name, events_name, path_name)
