@@ -10,11 +10,12 @@ class ParserEvents:
         являющегося лог файлом программы Procmon.
         Принимает на вход строковое имя файла pml_file_name.
     """
-    def __init__(self, pml_file_name:str):
-        self.pml_file_name      = pml_file_name
 
-        self.events             = []
-        self.Anomaly_intensity  = []
+    def __init__(self, pml_file_name: str):
+        self.pml_file_name = pml_file_name
+
+        self.events = []
+        self.Anomaly_intensity = []
 
     def GetEvents(self):
         """
@@ -75,14 +76,10 @@ class ParserEvents:
             return dict()
         details = event.details.copy()
         necessary_details = {}
-        # if EventClass.Registry == event.event_class:
-        #     commas_formatted_keys = ["Length", "SubKeys", "Values"]
-        #     for key in commas_formatted_keys:
-        #         if key in details:
-        #             necessary_details[key] = '{:,}'.format(details[key])
 
-        if EventClass.File_System == event.event_class:
-            commas_formatted_keys = ["AllocationSize", "Offset", "Length"]
+        if EventClass.File_System == event.event_class or \
+                EventClass.Network == event.event_class:
+            commas_formatted_keys = ["Length"]
             for key in commas_formatted_keys:
                 if key in details and int == type(details[key]):
                     necessary_details[key] = '{:,}'.format(details[key])
@@ -132,15 +129,17 @@ class ParserEvents:
 
 def main():
     pml_file_name = "F:\\EVENT\\EventTest\\test_event.PML"
-    anomaly_proc  = "RAT_client.exe"
-    scale_y       = 100
-    window_size   = 500
+    anomaly_proc = "RAT_client.exe"
+    scale_y = 100
+    window_size = 500
 
     print(f"Считываем события из тестового набора данных: {pml_file_name}")
     parser_pml = ParserEvents(pml_file_name)
-    parser_pml.GetEvents()
-    parser_pml.GetAnomalyIntensity(anomaly_proc, window_size)
-    parser_pml.PrintGrafAnomaly(scale_y)
+    events = parser_pml.GetEvents()
+    for e in events:
+        print(e)
+    # parser_pml.GetAnomalyIntensity(anomaly_proc, window_size)
+    # parser_pml.PrintGrafAnomaly(scale_y)
 
 
 if __name__ == '__main__':
