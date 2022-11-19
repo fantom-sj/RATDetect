@@ -5,15 +5,14 @@
 
 import tensorflow as tf
 from tensorflow import keras
-from keras import Model
-from keras.layers import GRU, LSTM, ConvLSTM1D
-from keras.utils import Progbar
+from keras.layers import GRU, LSTM
+from AnomalyDetector.AutoEncoder import Autoencoder_Base
 
 import pandas as pd
 import numpy as np
 
 
-class Autoencoder(Model):
+class Autoencoder(Autoencoder_Base):
     """
         Класс описывающий из чего состоит автоэнкодер и как
         происходит его обучение на каждом шаге, какие вычисляются метрики
@@ -64,130 +63,11 @@ class Autoencoder(Model):
         self.history_loss = {"epoch": [], "step": [], "loss": [], "mean_loss": [], "mae": []}
         self.history_valid = {"epoch": [], "step": [], "loss": [], "mean_loss": [], "mae": []}
 
-    def train_step(self, x_batch_train):
-        with tf.GradientTape() as tape:
-            logits = self.__call__(x_batch_train)
-            loss_value = self.loss(x_batch_train, logits)
-
-        trainable_vars = self.trainable_variables
-        gradients = tape.gradient(loss_value, trainable_vars)
-
-        # Обновляем веса
-        self.optimizer.apply_gradients(zip(gradients, trainable_vars))
-
-        # Обновляем метрику на обучении.
-        loss = float(np.mean(np.array(loss_value)[0]))
-        self.loss_tracker.update_state(loss_value)
-        self.mae_metric.update_state(x_batch_train, logits)
-
-        return loss
-
-    def education(self, training_dataset, epochs=1, shuffle=True,
-                  model_checkname="model", versia="1", path_model="", checkpoint=None):
-        loss = 0
-        metrics_names = ["Расхождение", "Средние расхождение", "Средняя абсолютная ошибка"]
-
-        if checkpoint is None:
-            start = 0
-        else:
-            start = checkpoint
-
-        for epoch in range(start, epochs, 1):
-            print("Эпоха {}/{}".format(epoch + 1, epochs))
-
-            progress_bar = Progbar(len(training_dataset),
-                                   stateful_metrics=metrics_names)
-
-            itter = 0
-            # Итерируем по пакетам в датасете.
-            for step, x_batch_train in enumerate(training_dataset):
-                loss = self.train_step(x_batch_train) * 100
-                loss_tracker_res = self.loss_tracker.result() * 100
-                mae_metric_res = self.mae_metric.result() * 100
-
-                # Пишем лог после прохождения каждого батча
-                self.history_loss["epoch"].append(epoch)
-                self.history_loss["step"].append(step)
-                self.history_loss["loss"].append(loss)
-                self.history_loss["mean_loss"].append(float(loss_tracker_res))
-                self.history_loss["mae"].append(float(mae_metric_res))
-
-                values = [("Расхождение", loss),
-                          ("Средние расхождение", (float(loss_tracker_res))),
-                          ("Средняя абсолютная ошибка", (float(mae_metric_res)))]
-
-                progress_bar.add(1, values=values)
-                itter += 1
-
-                if itter % 1000 == 0:
-                    self.save_weights(model_checkname + "itter_" + str(round(itter / 1000)))
-                    history_name = path_model + "history_train_i" + str(round(itter / 1000)) + "_v" + versia + ".csv"
-                    history_valid_name = path_model + "history_valid_i" + str(round(itter / 1000)) \
-                                         + "_v" + versia + ".csv"
-                    pd.DataFrame(self.history_loss).to_csv(history_name, index=False)
-                    pd.DataFrame(self.history_valid).to_csv(history_valid_name, index=False)
-
-            self.loss_tracker.reset_states()
-            self.mae_metric.reset_states()
-
-            valid_metrics_name = ["Расхождение", "Средние расхождение"]
-            print("Валидация после эпохи {}".format(epoch + 1))
-            progress_bar_valid = Progbar(training_dataset.get_valid_len(),
-                                         stateful_metrics=valid_metrics_name)
-
-            self.save_weights(model_checkname + "epoch_" + str(epoch + 1))
-            history_name = path_model + "history_train_e" + str(epoch + 1) + "_v" + versia + ".csv"
-            history_valid_name = path_model + "history_valid_e" + str(epoch + 1) + "_v" + versia + ".csv"
-            pd.DataFrame(self.history_loss).to_csv(history_name, index=False)
-            pd.DataFrame(self.history_valid).to_csv(history_valid_name, index=False)
-
-            try:
-                for step, valid_batch_x in enumerate(training_dataset.get_valid()):
-                    val_logits = self.__call__(valid_batch_x)
-                    valid_loss_value = self.loss(valid_batch_x, val_logits)
-
-                    self.valid_loss_tracker.update_state(valid_loss_value)
-                    self.valid_mae_metric.update_state(valid_batch_x, val_logits)
-
-                    valid_loss = float(np.mean(np.array(valid_loss_value)[0])) * 100
-                    valid_loss_tracker_res = float(self.valid_loss_tracker.result()) * 100
-                    valid_mae_metric_res = float(self.valid_mae_metric.result()) * 100
-
-                    values = [("Расхождение", valid_loss),
-                              ("Средние расхождение", valid_loss_tracker_res),
-                              ("Средняя абсолютная ошибка", valid_mae_metric_res)]
-
-                    # Пишем лог после прохождения каждого батча
-                    self.history_valid["epoch"].append(epoch)
-                    self.history_valid["step"].append(step)
-                    self.history_valid["loss"].append(loss)
-                    self.history_valid["mean_loss"].append(valid_loss_tracker_res)
-                    self.history_valid["mae"].append(valid_loss_tracker_res)
-
-                    progress_bar_valid.add(1, values=values)
-
-                self.valid_loss_tracker.reset_states()
-                self.valid_mae_metric.reset_state()
-            except:
-                print("Ошибка при валидации!")
-
-            if shuffle and (epoch != (epochs - 1)):
-                training_dataset.on_epoch_end()
-
-        print("Обучение завершено!\n")
-
     def call(self, input_features):
         x = input_features
-        # print("\n")
-        state = None
         for layer in self.encdec:
             x, state = layer(x)
-            # print(f"{layer.name}: {tf.shape(x)}")
         return x
-
-    @property
-    def metrics(self):
-        return [self.loss_tracker, self.mae_metric]
 
 
 class TrainingDatasetGen(keras.utils.Sequence):
@@ -199,7 +79,7 @@ class TrainingDatasetGen(keras.utils.Sequence):
 
     def __init__(self, dataset, max_min_file, feature_range, batch_size=1000, windows_size=1000, validation_factor=0.2):
         # Нормализуем данные
-        self.dataset = self.normalization(dataset, max_min_file, feature_range).to_numpy() #[:50000]
+        self.dataset = self.normalization(dataset, max_min_file, feature_range).to_numpy() #[:5000]
         if np.isnan(np.sum(self.dataset)):
             print("В обучающем датасете были обнаружены nan-данные, они были заменены на 0")
             self.dataset = np.nan_to_num(self.dataset)
