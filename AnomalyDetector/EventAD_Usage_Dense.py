@@ -13,34 +13,59 @@ import logging
 
 def main():
     # Парамеры автоэнкодера
-    versia          = "0.1"
+    versia          = "0.3.2"
     batch_size      = 100
-    window_size     = 500
+    window_size     = 10
     loss_func       = keras.losses.mse
     max_min_file    = "modeles\\EventAnomalyDetector\\" + versia + "\\M&M_event.csv"
-    model           = "modeles\\EventAnomalyDetector\\" + versia + "\\model_EAD_v" + versia
+    model           = "modeles\\EventAnomalyDetector\\" + versia + "\\Checkpoint\\epoch_3"
 
-    # Тестовый датасет
-    test_file     = "F:\\EVENT\\EventTest\\test_event.PML"
-    anomaly_proc  = "RAT_client.exe"
+    anomaly_proc    = {"NingaliNET": "RAT_client", "Rabbit-Hole": "1.exe", "Revenge-RAT": "RAT_client_Rev"}
+    color_RAT       = {"NingaliNET": "tab:red", "Rabbit-Hole": "tab:green", "Revenge-RAT": "tab:purple"}
 
-    print(f"Считываем события из тестового набора данных: {test_file}")
-    parser_pml   = ParserEvents(test_file)
-    parser_pml.GetEvents()
-    real_anomaly = parser_pml.GetAnomalyIntensity(anomaly_proc, window_size)
-    parser_pml.PrintGrafAnomaly(100)
-
-    characts_file   = "F:\\EVENT\\EventTest\\test_dataset_0.csv"
-    feature_range   = (-1, 1)
-    caracts_data    = pd.read_csv(characts_file)
-    caracts_pd      = caracts_data.drop(["Time_Stamp"], axis=1)
-    caracts_numpy   = TrainingDatasetGen.normalization(caracts_pd, max_min_file, feature_range, True).to_numpy()
+    characts_file = "F:\\EVENT\\EventTest\\test_dataset_0.csv"
+    feature_range = (-1, 1)
+    caracts_pd = pd.read_csv(characts_file)
+    caracts_np = caracts_pd.to_numpy()[300000:]
+    caracts_pd = caracts_pd.drop(["Time_Stamp"], axis=1)
+    caracts_pd = caracts_pd.drop(["Process_name"], axis=1)
+    caracts_numpy = TrainingDatasetGen.normalization(caracts_pd, max_min_file, feature_range, True).to_numpy()[300000:]
     if np.isnan(np.sum(caracts_numpy)):
         print("В тестовом датасете были обнаружены nan-данные, они были заменены на 0")
         caracts_numpy = np.nan_to_num(caracts_numpy)
 
-    numbs_count, caracts_count    = caracts_numpy.shape
-    batch_count                   = round(numbs_count/batch_size) - 11
+    print(f"Строим графики реальных аномалий")
+    real_anomaly = {}
+    for RAT in anomaly_proc:
+        real_anomaly[RAT] = []
+        for i in range(window_size, len(caracts_np), 1):
+            count_RAT = 0
+            for ch in caracts_np[i - window_size:i]:
+                if anomaly_proc[RAT] in ch[1]:
+                    count_RAT += 1
+            real_anomaly[RAT].append(count_RAT)
+
+        inten_max = max(real_anomaly[RAT])
+        for i in range(len(real_anomaly[RAT])):
+            real_anomaly[RAT][i] = real_anomaly[RAT][i] / inten_max * 100
+
+    plt.xlim([-5.0, len(caracts_np) + 5])
+    plt.ylim([-5.0, 105.0])
+    plt.title(f"График интенсивности аномальных событий процессов")
+    plt.grid(which='major')
+    plt.grid(which='minor', linestyle=':')
+
+    for RAT in real_anomaly:
+        plt.plot(real_anomaly[RAT], label=RAT, color=color_RAT[RAT])
+
+    plt.legend(fontsize=10)
+    plt.tight_layout()
+    plt.show()
+
+    numbs_count, caracts_count = caracts_numpy.shape
+    numbs_count                = round(numbs_count / batch_size) * batch_size - batch_size
+    batch_count                = round(numbs_count/batch_size)
+    caracts_numpy              = caracts_numpy[:numbs_count]
 
     # Определение автоэнкодера
     autoencoder = tf.keras.models.load_model(model)
@@ -52,17 +77,16 @@ def main():
     valid_metrics_name = ["Расхождение"]
     progress_bar = Progbar(batch_count, stateful_metrics=valid_metrics_name)
 
+    caracts_tensor = tf.convert_to_tensor(caracts_numpy)
+    caracts_tensor = tf.reshape(caracts_tensor, (batch_count, batch_size, caracts_count))
     for idx in range(0, batch_count, 1):
-        batch_x = []
-        for i in range(batch_size):
-            batch_x.append(caracts_numpy[i + (idx * batch_size):window_size + i + (idx * batch_size)])
+        batch_x = tf.gather(caracts_tensor, idx, axis=0)
+        batch_x = tf.reshape(batch_x, (batch_size, caracts_count))
         try:
-            batch_x = tf.convert_to_tensor(batch_x)
-            # batch_x = tf.reshape(batch_x, (1, windows_size, caracts_count))
             batch_x_restored = autoencoder.predict(batch_x, verbose=0)
 
             loss = loss_func(batch_x, batch_x_restored)
-            loss = tf.math.reduce_mean(loss, 1)
+            # loss = tf.math.reduce_mean(loss, 1)
             if idx == 0:
                 metrics_analiz["loss"] = loss
             else:
@@ -92,7 +116,8 @@ def main():
     plt.grid(which='major')
     plt.grid(which='minor', linestyle=':')
 
-    plt.plot(real_anomaly, label="Реальные аномалии", color="tab:red")
+    for RAT in real_anomaly:
+        plt.plot(real_anomaly[RAT], label=RAT, color=color_RAT[RAT])
     plt.plot(metrics_analiz_norm["loss"], label="Обнаруженные аномалии", color="tab:blue")
 
     plt.legend(fontsize=10)

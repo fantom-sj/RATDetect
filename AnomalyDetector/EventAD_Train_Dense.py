@@ -1,26 +1,26 @@
 import numpy as np
 
-from AutoEncoder_RNN import *
+from AutoEncoder_Dense import *
 from pathlib import Path
+
 
 def main(versia, arhiteche):
     # Параметры датасета
-    batch_size          = 500
+    batch_size          = 100
     validation_factor   = 0.05
-    window_size         = 500
     feature_range       = (-1, 1)
 
     # Параметры оптимизатора
-    init_learning_rate  = 0.1
-    decay_steps         = 1500
-    decay_rate          = 0.96
+    init_learning_rate  = 0.001
+    decay_steps         = 10000
+    decay_rate          = 0.2
     staircase           = True
 
     # Параметры нейронной сети
-    epochs              = 1
+    epochs              = 3
     continue_education  = False
     checkpoint          = None
-    shuffle             = False
+    shuffle             = True
     loss_func           = keras.losses.mse
     arhiteche           = arhiteche
     versia              = versia
@@ -39,27 +39,26 @@ def main(versia, arhiteche):
 
     data = pd.read_csv(dataset)
     data = data.drop(["Time_Stamp"], axis=1)
+    data = data.drop(["Process_name"], axis=1)
 
     print("Загрузка датасета завершена.")
 
-    training_dataset = TrainingDatasetGen(data, max_min_file, feature_range, batch_size, window_size,
-                                          validation_factor)
+    training_dataset = TrainingDatasetGen(data, max_min_file, feature_range, batch_size, validation_factor)
     print(training_dataset.numbs_count, training_dataset.caracts_count)
     print("Обучающий датасет создан.")
 
-    autoencoder = Autoencoder(training_dataset.caracts_count, arhiteche, window_size)
-    autoencoder.build((1, window_size, training_dataset.caracts_count))
+    autoencoder = Autoencoder(arhiteche, batch_size)
+    autoencoder.build((batch_size, training_dataset.caracts_count))
     autoencoder.summary()
 
-    # lr_schedule = keras.optimizers.schedules.ExponentialDecay(
-    #     init_learning_rate,
-    #     decay_steps=decay_steps,
-    #     decay_rate=decay_rate,
-    #     staircase=staircase
-    # )
-    #
-    optimizer = keras.optimizers.Adam(learning_rate=0.001)
+    lr_schedule = keras.optimizers.schedules.ExponentialDecay(
+        init_learning_rate,
+        decay_steps=decay_steps,
+        decay_rate=decay_rate,
+        staircase=staircase
+    )
 
+    optimizer = keras.optimizers.Adam(learning_rate=lr_schedule)
     autoencoder.compile(optimizer=optimizer, loss=loss_func)
     print("Автоэнкодер определён.")
 
@@ -81,13 +80,8 @@ def main(versia, arhiteche):
 
 
 if __name__ == '__main__':
-    # print(device_lib.list_local_devices())
-    # print("Ожидаем начала обучения!")
-    # time.sleep(9000)
     print("Запускаем обучение!")
-
-    arhiteche = {"GRU_1": (26, 28), "GRU_2": (24, 26), "GRU_3": (22, 24), "GRU_4": (20, 22),
-                 "GRU_5": (22, 20), "GRU_6": (24, 22), "GRU_7": (26, 24), "GRU_8": (28, 26)}
-    versia = "0.1"
+    arhiteche = [34, 32, 30, 28, 26, 25, 26, 28, 30, 32, 34]
+    versia = "0.3.2"
     print("\n\n" + versia)
     main(versia, arhiteche)
