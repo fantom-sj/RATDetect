@@ -2,16 +2,13 @@ from ProcessEventAnalis.EventsСharacts import CulcCharactsEventsOnWindow, CHARA
 from PMLParser import ParserEvents
 from threading import Thread
 from pathlib import Path
+from tqdm import tqdm
 
-
-import subprocess as sp
 import pandas as pd
-
 import logging
 import time
-import dpkt
 import math
-import re
+
 
 
 class AnalyzerEvents:
@@ -100,8 +97,12 @@ class AnalyzerEvents:
         if not (pml_file_name is None):
             print(f"Запускаем обработку файла: {pml_file_name}")
             parser = ParserEvents(pml_file_name)
+
+            pbar = tqdm(total=2842019, desc="Загрузка событий")
             for event in parser.GenEventIter():
                 self.array_events_global.append(event)
+                pbar.update(1)
+            pbar.close()
 
             path_new = self.path_name + "\\" + self.event_name + "\\" + "Обработанные файлы"
             if not Path(path_new).exists():
@@ -112,6 +113,7 @@ class AnalyzerEvents:
         array_characts  = []
         event_in_window = {}
         try:
+            pbar = tqdm(total=len(self.array_events_global), desc="Анализ событий")
             while len(self.array_events_global) > 0:
                 event = self.array_events_global[0]
                 if not event["Process Name"] in event_in_window:
@@ -126,6 +128,8 @@ class AnalyzerEvents:
                         if ch is not None:
                             array_characts.append(ch)
                         event_in_window[process].pop(0)
+                pbar.update(1)
+            pbar.close()
 
         except Exception as err:
             logging.exception(f"Ошибка!\n{err}")
@@ -201,9 +205,9 @@ class AnalyzerEvents:
 if __name__ == '__main__':
     events_name                 = "EventTest"
     path_name                   = "F:\\EVENT"
-    window_size                 = 500
-    charact_file_length         = 1000000
-    charact_file_name           = "train_dataset_"
+    window_size                 = 1
+    charact_file_length         = 100000000000
+    charact_file_name           = "train_dataset_2"
 
     analizator = AnalyzerEvents(window_size, charact_file_length,
                                 charact_file_name, events_name, path_name)
