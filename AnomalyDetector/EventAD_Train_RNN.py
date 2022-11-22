@@ -16,7 +16,7 @@ def main(versia, window_size, arhiteche):
 
     # Параметры нейронной сети
     epochs              = 5
-    continue_education  = False
+    continue_education  = True
     checkpoint          = None
     checkpoint_epoch    = 0
     sdvig               = True
@@ -94,12 +94,12 @@ def main(versia, window_size, arhiteche):
 
 
 if __name__ == '__main__':
+    versia          = "0.4.2_LSTM"
     window_size     = 100
     arhiteche       = {"1_Input": (window_size, 112),
-                       "2_GRU_seq": (56, 112), "3_GRU": (28, 56),
+                       "2_LSTM_seq": (56, 112), "3_LSTM": (28, 56),
                        "4_RepeatVector": (window_size, None),
-                       "5_GRU_seq": (56, 28), "6_GRU_seq": (112, 56)}
-    versia          = "0.4.1_GRU"
+                       "5_LSTM_seq": (56, 28), "6_LSTM_seq": (112, 56)}
 
     print("\n\n" + versia)
     main(versia, window_size, arhiteche)
