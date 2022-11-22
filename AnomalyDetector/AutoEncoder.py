@@ -2,17 +2,16 @@
     Модуль в котором содержится архитектура рекуррентной нейронной сети,
     используемой для детектирования аномалий в сетевом трафике.
 """
-
-import tensorflow as tf
+from abc import ABCMeta
+from keras.utils import Progbar
 from tensorflow import keras
 from keras import Model
-from keras.utils import Progbar
 
-import pandas as pd
+import tensorflow as tf
 import numpy as np
 
 
-class Autoencoder_Base(Model):
+class AutoencoderBase(Model, metaclass=ABCMeta):
     """
         Класс описывающий из чего состоит автоэнкодер и как
         происходит его обучение на каждом шаге, какие вычисляются метрики
@@ -20,7 +19,7 @@ class Autoencoder_Base(Model):
     """
 
     def __init__(self):
-        super(Autoencoder_Base, self).__init__()
+        super(AutoencoderBase, self).__init__()
 
         self.loss_tracker = keras.metrics.Mean(name="loss")
         self.mae_metric = keras.metrics.MeanAbsoluteError(name="mae")
@@ -46,7 +45,7 @@ class Autoencoder_Base(Model):
 
         return loss
 
-    def education(self, training_dataset, epochs=1, shuffle=True,
+    def education(self, training_dataset, epochs=1, sdvig=True,
                   model_checkname="model", versia="1", path_model="", checkpoint=None):
         metrics_names = ["Расхождение", "Средние расхождение", "Средняя абсолютная ошибка", "Скорость обучения"]
 
@@ -59,7 +58,7 @@ class Autoencoder_Base(Model):
             start = checkpoint
 
         with summary_writer.as_default():
-            global_step = 0
+            global_step = (len(training_dataset)+training_dataset.get_valid_len())*checkpoint
             tf.summary.trace_on(graph=True)
             tf.profiler.experimental.Profile(path_log)
             tf.profiler.experimental.start(path_log)
@@ -70,7 +69,7 @@ class Autoencoder_Base(Model):
                 progress_bar = Progbar(len(training_dataset),
                                        stateful_metrics=metrics_names)
 
-                itter = 0
+                itter = len(training_dataset)*epoch
                 # Итерируем по пакетам в датасете.
                 for step, x_batch_train in enumerate(training_dataset):
                     with tf.profiler.experimental.Trace("Train", step_num=step):
@@ -95,18 +94,21 @@ class Autoencoder_Base(Model):
                     itter += 1
 
                     if itter % 1000 == 0:
-                        self.save_weights(model_checkname + "itter_" + str(round(itter / 1000)))
+                        self.save_weights(model_checkname + "on_itter\\" + "itter_" + str(round(itter / 1000)))
 
                 self.loss_tracker.reset_states()
                 self.mae_metric.reset_states()
-
+                try:
+                    self.save_weights(model_checkname + "epoch_" + str(epoch + 1))
+                    self.save(model_checkname + "epoch_" + str(epoch + 1))
+                except Exception as err:
+                    print("Ошибка сохранения модели!")
+                    print(err)
+                
                 valid_metrics_name = ["Расхождение", "Средние расхождение"]
                 print("Валидация после эпохи {}".format(epoch + 1))
                 progress_bar_valid = Progbar(training_dataset.get_valid_len(),
                                              stateful_metrics=valid_metrics_name)
-
-                self.save_weights(model_checkname + "epoch_" + str(epoch + 1))
-                self.save(model_checkname + "epoch_" + str(epoch + 1))
 
                 try:
                     for step, valid_batch_x in enumerate(training_dataset.get_valid()):
@@ -136,7 +138,7 @@ class Autoencoder_Base(Model):
                 except:
                     print("Ошибка при валидации!")
 
-                if shuffle and (epoch != (epochs - 1)):
+                if sdvig and (epoch != (epochs - 1)):
                     training_dataset.on_epoch_end()
 
             tf.summary.trace_export("graph", step=global_step, profiler_outdir=path_log)
@@ -145,4 +147,3 @@ class Autoencoder_Base(Model):
         # tf.summary.trace_off()
         # summary_writer.close()
         print("Обучение завершено!\n")
-

@@ -7,13 +7,13 @@ import tensorflow as tf
 from tensorflow import keras
 from keras.layers import Dense
 from keras.utils import Progbar
-from AnomalyDetector.AutoEncoder import Autoencoder_Base
+from AnomalyDetector.AutoEncoder import AutoencoderBase
 
 import pandas as pd
 import numpy as np
 
 
-class Autoencoder(Autoencoder_Base):
+class Autoencoder(AutoencoderBase):
     """
         Класс описывающий из чего состоит автоэнкодер и как
         происходит его обучение на каждом шаге, какие вычисляются метрики
