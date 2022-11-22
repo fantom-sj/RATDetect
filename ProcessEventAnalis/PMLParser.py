@@ -128,7 +128,7 @@ class ParserEvents:
 
 
 def main():
-    pml_file_name = "F:\\EVENT\\EventTest\\test_event.PML"
+    pml_file_name = "F:\\EVENT\\EventTest\\event_log_7.pml"
     anomaly_proc = "RAT_client.exe"
     scale_y = 100
     window_size = 500
@@ -137,7 +137,8 @@ def main():
     parser_pml = ParserEvents(pml_file_name)
     events = parser_pml.GetEvents()
     for e in events:
-        print(e)
+        if "Length" in e["Detail"]:
+            print(e["Detail"]["Length"] + "\t")
     # parser_pml.GetAnomalyIntensity(anomaly_proc, window_size)
     # parser_pml.PrintGrafAnomaly(scale_y)
 

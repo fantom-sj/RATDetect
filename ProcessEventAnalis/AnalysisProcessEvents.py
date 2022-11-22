@@ -12,12 +12,13 @@ import math
 
 
 class AnalyzerEvents:
-    def __init__(self, window_size, charact_file_length, charact_file_mask, event_name, path_name):
+    def __init__(self, window_size, charact_file_length, charact_file_mask, event_name, path_name, user_dir):
         self.window_size            = window_size
         self.charact_file_length    = charact_file_length
         self.charact_file_mask      = charact_file_mask
         self.event_name             = event_name
         self.path_name              = path_name
+        self.user_dir               = user_dir
 
         self.files_events_arr       = []
         self.array_events_global    = []
@@ -124,7 +125,7 @@ class AnalyzerEvents:
 
                 for process in event_in_window:
                     if len(event_in_window[process]) == window_size:
-                        ch = CulcCharactsEventsOnWindow(event_in_window[process], self.window_size)
+                        ch = CulcCharactsEventsOnWindow(event_in_window[process], self.user_dir)
                         if ch is not None:
                             array_characts.append(ch)
                         event_in_window[process].pop(0)
@@ -147,7 +148,7 @@ class AnalyzerEvents:
 
                 pd_characts_old = pd.read_csv(characts_file_name)
                 pd_characts     = pd.DataFrame(array_characts)
-                pd_characts     = pd_characts.sort_values(by="Time_Stamp")
+                pd_characts     = pd_characts.sort_values(by="Time_Stamp_End")
                 pd_characts_new = pd.concat([pd_characts_old, pd_characts])
 
                 pd_characts_arr = []
@@ -205,10 +206,11 @@ class AnalyzerEvents:
 if __name__ == '__main__':
     events_name                 = "EventTest"
     path_name                   = "F:\\EVENT"
-    window_size                 = 1
+    window_size                 = 100
     charact_file_length         = 100000000000
-    charact_file_name           = "train_dataset_2"
+    charact_file_name           = "test_112_dataset_"
+    user_dir                    = "Жертва"
 
-    analizator = AnalyzerEvents(window_size, charact_file_length,
-                                charact_file_name, events_name, path_name)
+    analizator = AnalyzerEvents(window_size, charact_file_length, charact_file_name,
+                                events_name, path_name, user_dir)
     analizator.run()
