@@ -2,6 +2,7 @@ import os
 import pandas as pd
 from pathlib import Path
 import matplotlib.pyplot as plt
+from matplotlib.widgets import Slider
 from scipy.signal import savgol_filter
 # from AnomalyDetector.AutoEncoder_RNN import TrainingDatasetGen
 
@@ -131,8 +132,9 @@ def merge_csv(path, csv_file_arr):
 
 
 def print_anomaly():
-    real_anomaly_file       = "AnomalyDetector\\modeles\\EventAnomalyDetector\\0.3.6\\res_real_anomaly.csv"
-    prognoses_anomaly_file  = "AnomalyDetector\\modeles\\EventAnomalyDetector\\0.3.6\\res_prognoses_anomaly.csv"
+    versia = "0.4.2_LSTM"
+    real_anomaly_file      = "AnomalyDetector\\modeles\\EventAnomalyDetector\\" + versia + "\\res_real_anomaly.csv"
+    prognoses_anomaly_file = "AnomalyDetector\\modeles\\EventAnomalyDetector\\" + versia + "\\res_prognoses_anomaly.csv"
 
     real_anomaly        = pd.read_csv(real_anomaly_file).to_dict("list")
     prognoses_anomaly   = pd.read_csv(prognoses_anomaly_file).to_dict("list")
@@ -143,23 +145,37 @@ def print_anomaly():
         print(RAT)
 
     for epoch in prognoses_anomaly:
-        if epoch == "Unnamed: 0":
-            continue
 
-        plt.xlim([-5.0, len(real_anomaly["Unnamed: 0"]) + 5])
-        plt.ylim([-5.0, 105.0])
+        # plt.xlim([-5.0, len(epoch) + 5])
+        # plt.ylim([-5.0, 105.0])
+
         plt.title(f"График интенсивности аномальных событий процессов")
         plt.grid(which='major')
         plt.grid(which='minor', linestyle=':')
 
-        for RAT in real_anomaly:
-            if RAT == "Unnamed: 0":
-                continue
-            plt.plot(real_anomaly[RAT], label=RAT, color=color_RAT[RAT])
-        plt.plot(prognoses_anomaly[epoch], label=epoch, color="tab:blue")
+        fig = plt.figure()
+        ax = fig.subplots()
+        plt.ylim([0.02, 0.13])
+        p, = ax.plot(prognoses_anomaly[epoch], label=epoch, color="tab:blue")
+        ax.legend(fontsize=10)
+        plt.subplots_adjust(bottom=0.25)
 
-        plt.legend(fontsize=10)
+        ax_slide = plt.axes([0.25, 0.01, 0.65, 0.05])
+        win_size = Slider(ax_slide, 'Window size', valmin=5, valmax=99, valinit=99, valstep=2)
+
+        def update(val):
+            current_v = int(win_size.val)
+            new_y = savgol_filter(prognoses_anomaly[epoch], current_v, 3)
+            p.set_ydata(new_y)
+            fig.canvas.draw()
+
+        # for RAT in real_anomaly:
+        #     if RAT == "Unnamed: 0":
+        #         continue
+        #     plt.plot(real_anomaly[RAT], label=RAT, color=color_RAT[RAT])
+
         plt.tight_layout()
+        win_size.on_changed(update)
         plt.show()
 
 
