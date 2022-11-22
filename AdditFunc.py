@@ -3,7 +3,8 @@ import pandas as pd
 from pathlib import Path
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
-from AnomalyDetector.AutoEncoder_RNN import TrainingDatasetGen
+# from AnomalyDetector.AutoEncoder_RNN import TrainingDatasetGen
+
 
 def SearchNearest(num, arr):
     max = 0
@@ -41,88 +42,121 @@ def merge_csv(path, csv_file_arr):
     csv_all.to_csv(path, index=False)
 
 
-def print_model_res(file_path, train, valid, feature_range = (0, 100),
-                    window_length=31, window_length_valid=3, polyorder=3):
-    path = Path(file_path)
-    arr_file = []
-    if path.exists():
-        for file in path.iterdir():
-            if train and "train" in str(file).split("\\")[-1]:
-                arr_file.append(str(file))
-            elif valid and "valid" in str(file).split("\\")[-1]:
-                arr_file.append(str(file))
-            else:
-                continue
-    else:
-        print(f"Ошибка: Директория {file_path} не найдена.")
+# def print_model_res(file_path, train, valid, feature_range = (0, 100),
+#                     window_length=31, window_length_valid=3, polyorder=3):
+#     path = Path(file_path)
+#     arr_file = []
+#     if path.exists():
+#         for file in path.iterdir():
+#             if train and "train" in str(file).split("\\")[-1]:
+#                 arr_file.append(str(file))
+#             elif valid and "valid" in str(file).split("\\")[-1]:
+#                 arr_file.append(str(file))
+#             else:
+#                 continue
+#     else:
+#         print(f"Ошибка: Директория {file_path} не найдена.")
+#
+#     pd_data_arr = {}
+#     if len(arr_file)>0:
+#         for file in arr_file:
+#             file_name = str(file).split("\\")[-1]
+#             print(f"Эагружаем файл: {file_name}")
+#             pd_data_arr[file_name] = pd.read_csv(file)
+#             print(f"Файл {file_name} успешно загружен.\n\n")
+#     else:
+#         print(f"Ошибка: В директории {file_path} нет файлов удовлетворяющих заданным требованиям.")
+#
+#     window_length_orign = window_length
+#     for file in pd_data_arr:
+#         if "train_e" in file:
+#             epoch       = file.split("_")[2][1]
+#             model       = file.split("_")[3].split(".c")[0]
+#             name_graf   = f"История обучения в эпоху {epoch} для модели {model}"
+#         elif "train" in file:
+#             model       = file.split("_")[2].split(".c")[0]
+#             name_graf   = f"История обучения модели"
+#         elif "valid_e" in file:
+#             epoch       = file.split("_")[2][1]
+#             model       = file.split("_")[3].split(".c")[0]
+#             name_graf   = f"История валидации в эпоху {epoch} для модели {model}"
+#             window_length = window_length_valid
+#             polyorder = 1
+#         elif "valid" in file:
+#             model       = file.split("_")[2].split(".c")[0]
+#             name_graf   = f"История всей валидации модели {model}"
+#             window_length = window_length_valid
+#             polyorder = 1
+#         else:
+#             name_graf   = "Неизвестные данные"
+#
+#         loss        = pd_data_arr[file]["loss"].to_numpy()
+#         mean_loss   = pd_data_arr[file]["mean_loss"].to_numpy()
+#         mae         = pd_data_arr[file]["mae"].to_numpy()
+#
+#         if len(loss) == 0 or len(mean_loss) == 0 or len(mae) == 0:
+#             print(f"В файле {file} нет данных об одной из трёх метрик!\n")
+#             continue
+#         elif window_length > len(loss):
+#             print(f"Для файла {file} задана не подходящая длина окна!\n"
+#                   f"В данном файле метрики содержат по {len(loss)} записей,\n"
+#                   f"введите размер меньший или равный этому числу, а также большую чем {polyorder}:")
+#             window_length = int(input())
+#
+#         print(f"Сглаживание метрик из файла: {file}")
+#         loss        = savgol_filter(loss, window_length, polyorder)
+#         mean_loss   = savgol_filter(mean_loss, window_length, polyorder)
+#         mae         = savgol_filter(mae, window_length, polyorder)
+#
+#         print(f"Нормализация метрик из файла: {file}\n")
+#         pd_metrics      = pd.DataFrame({"loss": loss, "mean_loss": mean_loss, "mae": mae})
+#         norm_metrics    = TrainingDatasetGen.normalization(pd_metrics, feature_range=feature_range)
+#
+#         mng = plt.get_current_fig_manager()
+#         mng.window.showMaximized()
+#
+#         plt.xlim([-5.0, len(loss)])
+#         plt.ylim([-5.0, 105.0])
+#         plt.title(name_graf)
+#         plt.grid(which='major')
+#         plt.grid(which='minor', linestyle=':')
+#
+#         plt.plot(norm_metrics["loss"], label="Ошибка прогнозирования", color="tab:red")
+#         plt.plot(norm_metrics["mean_loss"], label="Средний уровень ошибок", color="tab:blue")
+#         # plt.plot(norm_metrics["mae"], label="Средняя абсолютная ошибка", color="tab:green")
+#
+#         plt.legend(fontsize=10)
+#         plt.tight_layout()
+#         plt.show()
 
-    pd_data_arr = {}
-    if len(arr_file)>0:
-        for file in arr_file:
-            file_name = str(file).split("\\")[-1]
-            print(f"Эагружаем файл: {file_name}")
-            pd_data_arr[file_name] = pd.read_csv(file)
-            print(f"Файл {file_name} успешно загружен.\n\n")
-    else:
-        print(f"Ошибка: В директории {file_path} нет файлов удовлетворяющих заданным требованиям.")
 
-    window_length_orign = window_length
-    for file in pd_data_arr:
-        if "train_e" in file:
-            epoch       = file.split("_")[2][1]
-            model       = file.split("_")[3].split(".c")[0]
-            name_graf   = f"История обучения в эпоху {epoch} для модели {model}"
-        elif "train" in file:
-            model       = file.split("_")[2].split(".c")[0]
-            name_graf   = f"История обучения модели"
-        elif "valid_e" in file:
-            epoch       = file.split("_")[2][1]
-            model       = file.split("_")[3].split(".c")[0]
-            name_graf   = f"История валидации в эпоху {epoch} для модели {model}"
-            window_length = window_length_valid
-            polyorder = 1
-        elif "valid" in file:
-            model       = file.split("_")[2].split(".c")[0]
-            name_graf   = f"История всей валидации модели {model}"
-            window_length = window_length_valid
-            polyorder = 1
-        else:
-            name_graf   = "Неизвестные данные"
+def print_anomaly():
+    real_anomaly_file       = "AnomalyDetector\\modeles\\EventAnomalyDetector\\0.3.6\\res_real_anomaly.csv"
+    prognoses_anomaly_file  = "AnomalyDetector\\modeles\\EventAnomalyDetector\\0.3.6\\res_prognoses_anomaly.csv"
 
-        loss        = pd_data_arr[file]["loss"].to_numpy()
-        mean_loss   = pd_data_arr[file]["mean_loss"].to_numpy()
-        mae         = pd_data_arr[file]["mae"].to_numpy()
+    real_anomaly        = pd.read_csv(real_anomaly_file).to_dict("list")
+    prognoses_anomaly   = pd.read_csv(prognoses_anomaly_file).to_dict("list")
 
-        if len(loss) == 0 or len(mean_loss) == 0 or len(mae) == 0:
-            print(f"В файле {file} нет данных об одной из трёх метрик!\n")
+    color_RAT = {"NingaliNET": "tab:red", "Rabbit-Hole": "tab:green", "Revenge-RAT": "tab:purple"}
+
+    for RAT in real_anomaly:
+        print(RAT)
+
+    for epoch in prognoses_anomaly:
+        if epoch == "Unnamed: 0":
             continue
-        elif window_length > len(loss):
-            print(f"Для файла {file} задана не подходящая длина окна!\n" 
-                  f"В данном файле метрики содержат по {len(loss)} записей,\n"
-                  f"введите размер меньший или равный этому числу, а также большую чем {polyorder}:")
-            window_length = int(input())
 
-        print(f"Сглаживание метрик из файла: {file}")
-        loss        = savgol_filter(loss, window_length, polyorder)
-        mean_loss   = savgol_filter(mean_loss, window_length, polyorder)
-        mae         = savgol_filter(mae, window_length, polyorder)
-
-        print(f"Нормализация метрик из файла: {file}\n")
-        pd_metrics      = pd.DataFrame({"loss": loss, "mean_loss": mean_loss, "mae": mae})
-        norm_metrics    = TrainingDatasetGen.normalization(pd_metrics, feature_range=feature_range)
-
-        mng = plt.get_current_fig_manager()
-        mng.window.showMaximized()
-
-        plt.xlim([-5.0, len(loss)])
+        plt.xlim([-5.0, len(real_anomaly["Unnamed: 0"]) + 5])
         plt.ylim([-5.0, 105.0])
-        plt.title(name_graf)
+        plt.title(f"График интенсивности аномальных событий процессов")
         plt.grid(which='major')
         plt.grid(which='minor', linestyle=':')
 
-        plt.plot(norm_metrics["loss"], label="Ошибка прогнозирования", color="tab:red")
-        plt.plot(norm_metrics["mean_loss"], label="Средний уровень ошибок", color="tab:blue")
-        # plt.plot(norm_metrics["mae"], label="Средняя абсолютная ошибка", color="tab:green")
+        for RAT in real_anomaly:
+            if RAT == "Unnamed: 0":
+                continue
+            plt.plot(real_anomaly[RAT], label=RAT, color=color_RAT[RAT])
+        plt.plot(prognoses_anomaly[epoch], label=epoch, color="tab:blue")
 
         plt.legend(fontsize=10)
         plt.tight_layout()
@@ -149,18 +183,19 @@ def main():
     #     "F:\\VNAT\\Mytraffic\\youtube_me\\learn_and_valid_dataset\\dataset_5.csv"
     # ])
 
-    versia          = "0.8.6.2"
-    path_model      = "D:\\Пользователи\\Admin\\Рабочий стол\\Статья по КБ\\RATDetect\\" \
-                      "AnomalyDetector\\modeles\\AnomalyDetector\\" + versia
-    train           = True
-    valid           = False
-    feature_range   = (0, 100)
-    window_length   = 31
-    window_valid    = 2
-    polyorder       = 3
+    # versia          = "0.8.6.2"
+    # path_model      = "D:\\Пользователи\\Admin\\Рабочий стол\\Статья по КБ\\RATDetect\\" \
+    #                   "AnomalyDetector\\modeles\\AnomalyDetector\\" + versia
+    # train           = True
+    # valid           = False
+    # feature_range   = (0, 100)
+    # window_length   = 31
+    # window_valid    = 2
+    # polyorder       = 3
+    #
+    # print_model_res(path_model, train, valid, feature_range, window_length, window_valid, polyorder)
 
-    print_model_res(path_model, train, valid, feature_range, window_length, window_valid, polyorder)
-
+    print_anomaly()
 
 if __name__ == '__main__':
     main()
