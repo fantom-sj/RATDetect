@@ -112,24 +112,55 @@ class AnalyzerEvents:
             Path(pml_file_name).rename(path_new + "\\" + file_only_name)
 
         array_characts  = []
-        event_in_window = {}
+
+        def analyz_thread_func(batch):
+            ch = CulcCharactsEventsOnWindow(batch, self.user_dir)
+            if ch is not None:
+                array_characts.append(ch)
+
+        thread_arr = []
+        batch_events_process = {}
         try:
             pbar = tqdm(total=len(self.array_events_global), desc="Анализ событий")
             while len(self.array_events_global) > 0:
                 event = self.array_events_global[0]
-                if not event["Process Name"] in event_in_window:
-                    event_in_window[event["Process Name"]] = []
-
-                event_in_window[event["Process Name"]].append(event)
+                process_name = event["Process Name"]
+                if not process_name in batch_events_process:
+                    batch_events_process[process_name] = []
+                batch_events_process[process_name].append(event)
                 self.array_events_global.pop(0)
-
-                for process in event_in_window:
-                    if len(event_in_window[process]) == window_size:
-                        ch = CulcCharactsEventsOnWindow(event_in_window[process], self.user_dir)
-                        if ch is not None:
-                            array_characts.append(ch)
-                        event_in_window[process].pop(0)
                 pbar.update(1)
+                if len(self.array_events_global) > 0:
+                    while self.array_events_global[0]["Process Name"] == process_name:
+                        batch_events_process[process_name].append(self.array_events_global[0])
+                        self.array_events_global.pop(0)
+                        if len(self.array_events_global) == 0:
+                            break
+                        pbar.update(1)
+                        if len(batch_events_process[process_name]) == 100:
+                            thread_arr.append(Thread(target=analyz_thread_func,
+                                                     args=(batch_events_process[process_name],)))
+                            thread_arr[-1].start()
+                            batch_events_process[process_name].clear()
+
+                if len(batch_events_process[process_name]) > 10:
+                    thread_arr.append(Thread(target=analyz_thread_func, args=(batch_events_process[process_name],)))
+                    thread_arr[-1].start()
+                    batch_events_process[process_name].clear()
+
+            for proc_events in batch_events_process:
+                if len(batch_events_process[proc_events]) > 0:
+                    thread_arr.append(Thread(target=analyz_thread_func, args=(batch_events_process[proc_events],)))
+                    thread_arr[-1].start()
+                    batch_events_process[proc_events].clear()
+
+            control = True
+            while control:
+                control = False
+                for thr in thread_arr:
+                    control |= thr.is_alive()
+                print("Ждем окончания анализа...")
+
             pbar.close()
 
         except Exception as err:
@@ -208,7 +239,7 @@ if __name__ == '__main__':
     path_name                   = "F:\\EVENT"
     window_size                 = 100
     charact_file_length         = 100000000000
-    charact_file_name           = "test_112_dataset_"
+    charact_file_name           = "train_112_dataset_1"
     user_dir                    = "Жертва"
 
     analizator = AnalyzerEvents(window_size, charact_file_length, charact_file_name,
