@@ -71,7 +71,8 @@ def main():
     characts_file   = "F:\\VNAT\\Mytraffic\\youtube_me\\test_dataset\\test_dataset_21.csv"
     feature_range   = (-1, 1)
     caracts_data    = pd.read_csv(characts_file)
-    caracts_pd      = caracts_data.drop(["Time_Stamp"], axis=1)
+    caracts_pd      = caracts_data.drop(["Time_Stamp_Start"], axis=1)
+    caracts_pd      = caracts_pd.drop(["Time_Stamp_End"], axis=1)
     caracts_pd      = caracts_pd.drop(["Count_src_is_dst_ports"], axis=1)
     caracts_pd      = caracts_pd.drop(["Dev_size_TCP_paket"], axis=1)
     caracts_pd      = caracts_pd.drop(["Dev_size_UDP_paket"], axis=1)

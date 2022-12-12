@@ -60,8 +60,8 @@ class AutoencoderBase(Model, metaclass=ABCMeta):
         with summary_writer.as_default():
             global_step = (len(training_dataset)+training_dataset.get_valid_len())*checkpoint
             tf.summary.trace_on(graph=True)
-            tf.profiler.experimental.Profile(path_log)
-            tf.profiler.experimental.start(path_log)
+            # tf.profiler.experimental.Profile(path_log)
+            # tf.profiler.experimental.start(path_log)
 
             for epoch in range(start, epochs, 1):
                 print("Эпоха {}/{}".format(epoch + 1, epochs))
@@ -142,7 +142,7 @@ class AutoencoderBase(Model, metaclass=ABCMeta):
                     training_dataset.on_epoch_end()
 
             tf.summary.trace_export("graph", step=global_step, profiler_outdir=path_log)
-            tf.profiler.experimental.stop()
+            # tf.profiler.experimental.stop()
 
         # tf.summary.trace_off()
         # summary_writer.close()

@@ -3,7 +3,7 @@
     используемой для детектирования аномалий в сетевом трафике.
 """
 from keras.layers import GRU, LSTM, Input, RepeatVector, TimeDistributed, Dense
-from AutoEncoder import AutoencoderBase
+from AnomalyDetector.AutoEncoder import AutoencoderBase
 from tensorflow import keras
 from keras.models import Sequential
 from tqdm import tqdm
@@ -33,11 +33,11 @@ class Autoencoder(AutoencoderBase):
             if "Input" in layer:
                 self.graph.add(
                     Input(
-                        shape=(shape_1, shape_2),
+                        # shape=(shape_1, shape_2),
+                        batch_input_shape=[1, shape_1, shape_2],
                         name=f"layer_t.{layer}_shape.{shape_1}_{shape_2}"
                     )
                 )
-                print("add input")
             if "GRU" in layer:
                 if "seq" in layer:
                     return_sequences = True

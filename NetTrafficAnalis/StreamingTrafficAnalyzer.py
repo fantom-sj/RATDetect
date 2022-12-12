@@ -14,12 +14,12 @@ import re
 
 
 class SnifferTraffic:
-    def __init__(self, size_pcap_length, iface_name, trffic_name, trffic_file_mask, path_name):
-        self.size_pcap_length           = size_pcap_length
-        self.iface_name                 = iface_name
-        self.trffic_name                = trffic_name
-        self.trffic_file_mask           = trffic_file_mask
-        self.path_name                  = path_name
+    def __init__(self, pcap_length, iface_name, path_tshark, trffic_file_mask, path_name):
+        self.pcap_length       = pcap_length
+        self.iface_name        = iface_name
+        self.trffic_file_mask  = trffic_file_mask
+        self.path_name         = path_name
+        self.path_tshark       = path_tshark
 
         self.last_file_id   = None
         self.iface          = None
@@ -27,7 +27,7 @@ class SnifferTraffic:
         self.run_sniff      = False
 
     def __SniffPackets__(self, file_name):
-        sniffer = ["Wireshark\\tshark.exe", "-c", str(self.size_pcap_length), "-w", file_name]
+        sniffer = [self.path_tshark, "-c", str(self.pcap_length), "-w", file_name]
         CREATE_NO_WINDOW = 0x08000000
         if self.iface:
             sniffer.append("-i " + str(self.iface))
@@ -35,7 +35,7 @@ class SnifferTraffic:
         prog.communicate()
 
     def GetNumberIface(self):
-        get_ifaces = ["Wireshark\\tshark.exe", "-D"]
+        get_ifaces = [self.path_tshark, "-D"]
         CREATE_NO_WINDOW = 0x08000000
         prog = sp.Popen(get_ifaces, stdout=sp.PIPE, creationflags=CREATE_NO_WINDOW)
         ifaces, err = prog.communicate()
@@ -58,7 +58,7 @@ class SnifferTraffic:
                 Если таковых файлов нет, то возвращает 0
         """
 
-        path_sniffer_home = Path(self.path_name + "\\" + self.trffic_name)
+        path_sniffer_home = Path(self.path_name)
         file_arr = []
 
         for file in path_sniffer_home.iterdir():
@@ -73,15 +73,11 @@ class SnifferTraffic:
 
             # Получение индексов файлов с трафиком
             for file_name in file_arr:
-                index_SnHome = file_name.find(self.trffic_name)
-                index_file = [int(s) for s in re.split('_|.p', file_name[index_SnHome + 5:]) if s.isdigit()][0]
+                index = file_name.find(self.trffic_file_mask)
+                index_file = [int(s) for s in re.split('_|.p', file_name[index:]) if s.isdigit()][0]
                 indexs_files_pcapng.append(index_file)
 
             indexs_files_pcapng.sort()
-
-            # for index in indexs_files_pcapng:
-            #     traffic_file = f"{self.path_name}\\{self.trffic_name}\\{self.trffic_file_mask}{index}.pcapng"
-            #     preprocessing_queue.append(traffic_file)
 
             self.last_file_id = indexs_files_pcapng[-1]
         else:
@@ -104,7 +100,7 @@ class SnifferTraffic:
 
         self.last_file_id += 1
         while self.run_sniff:
-            traffic_file = f"{self.path_name}\\{self.trffic_name}\\{self.trffic_file_mask}{self.last_file_id}.pcapng"
+            traffic_file = f"{self.path_name}\\{self.trffic_file_mask}{self.last_file_id}.pcapng"
 
             try:
                 th_sniff = Thread(target=self.__SniffPackets__, args=(traffic_file,))
@@ -119,8 +115,8 @@ class SnifferTraffic:
 
     def run(self):
         if Path(self.path_name).exists():
-            if not Path(self.path_name + "\\" + self.trffic_name).exists():
-                Path(self.path_name + "\\" + self.trffic_name).mkdir()
+            if not Path(self.path_name).exists():
+                Path(self.path_name).mkdir()
 
             self.GetNumberIface()
             print(f"Интерфейс {self.iface_name} имеет ID: {self.iface}")
@@ -140,13 +136,12 @@ class SnifferTraffic:
 
 
 class AnalyzerPackets:
-    def __init__(self, window_size, charact_file_length, charact_file_mask, ip_client, path_name, trffic_name):
+    def __init__(self, window_size, charact_file_length, charact_file_mask, ip_client, path_name):
         self.window_size            = window_size
         self.charact_file_length    = charact_file_length
         self.charact_file_mask      = charact_file_mask
         self.ip_client              = ip_client
         self.path_name              = path_name
-        self.trffic_name            = trffic_name
 
         self.files_traffic_arr  = []
         self.array_paket_global = []
@@ -159,7 +154,7 @@ class AnalyzerPackets:
         self.GetFilesTraffic()
 
     def GetFilesTraffic(self):
-        path_sniffer_home = Path(self.path_name + "\\" + self.trffic_name)
+        path_sniffer_home = Path(self.path_name)
         files_local      = {}
         files_timecreate = []
 
@@ -197,7 +192,7 @@ class AnalyzerPackets:
         return len(self.files_traffic_arr)
 
     def GetLastFileId(self):
-        path_home = Path(self.path_name + "\\" + self.trffic_name)
+        path_home = Path(self.path_name)
         file_arr = []
 
         for file in path_home.iterdir():
@@ -291,7 +286,7 @@ class AnalyzerPackets:
         for paket in pakets_characts:
             self.array_paket_global.append(paket)
 
-        path_new = self.path_name + "\\" + self.trffic_name + "\\" + "Обработанные файлы"
+        path_new = self.path_name + "\\" + "Обработанные файлы"
         if not Path(path_new).exists():
             Path(path_new).mkdir()
         file_only_name = file_name.split("\\")[-1]
@@ -311,7 +306,7 @@ class AnalyzerPackets:
                     array_characts.append(ch)
                 else:
                     continue
-                self.array_paket_global.pop(0)
+                self.array_paket_global = self.array_paket_global[1:]
 
         except Exception as err:
             logging.exception(f"Ошибка!\n{err}")
@@ -324,26 +319,15 @@ class AnalyzerPackets:
             return False
         else:
             try:
-                characts_file_name = self.path_name + "\\" + self.trffic_name + "\\" + \
+                self.index_charact_file += 1
+                characts_file_name = self.path_name + "\\" + \
                                      self.charact_file_mask + str(self.index_charact_file) + ".csv"
 
-                pd_characts_old = pd.read_csv(characts_file_name)
                 pd_characts = pd.DataFrame(array_characts)
-
-                pd_characts_new = pd.concat([pd_characts_old, pd_characts], ignore_index=False)
-                pd_characts_arr = []
-                num_chunks = math.ceil(len(pd_characts_new) / self.charact_file_length)
-                for i in range(num_chunks):
-                    pd_characts_arr.append(pd_characts_new[i * self.charact_file_length:(i + 1) * self.charact_file_length])
-
-                pd_characts_arr[0].to_csv(characts_file_name, index=False)
-                if len(pd_characts_arr) == 2:
-                    self.index_charact_file += 1
-                    characts_file_name = self.path_name + "\\" + self.trffic_name + "\\" + \
-                                         self.charact_file_mask + str(self.index_charact_file) + ".csv"
-                    pd_characts_arr[1].to_csv(characts_file_name, index=False)
+                pd_characts.to_csv(characts_file_name, index=False)
 
                 print("Парсинг завершился!")
+
                 return True
             except Exception as err:
                 logging.exception(f"Ошибка!\n{err}")
@@ -353,14 +337,14 @@ class AnalyzerPackets:
         for pkt in pakets:
             self.array_paket_global.append(pkt)
 
-        if Path(self.path_name + "\\" + self.trffic_name).exists():
-            characts_file_name = self.path_name + "\\" + self.trffic_name + "\\" + \
-                                 self.charact_file_mask + str(self.index_charact_file) + ".csv"
-            if not Path(characts_file_name).exists():
-                pd_ch_name = pd.DataFrame()
-                for ch in CHARACTERISTIC:
-                    pd_ch_name[ch] = []
-                pd_ch_name.to_csv(str(characts_file_name), index=False)
+        if Path(self.path_name).exists():
+            # characts_file_name = self.path_name + "\\" + \
+            #                      self.charact_file_mask + str(self.index_charact_file) + ".csv"
+            # if not Path(characts_file_name).exists():
+            #     pd_ch_name = pd.DataFrame()
+            #     for ch in CHARACTERISTIC:
+            #         pd_ch_name[ch] = []
+            #     pd_ch_name.to_csv(str(characts_file_name), index=False)
 
             print("Запущен анализ заданных пакетов")
             self.ProcessingTraffic()
@@ -382,14 +366,14 @@ class AnalyzerPackets:
                     continue
 
     def run(self):
-        if Path(self.path_name + "\\" + self.trffic_name).exists():
-            characts_file_name = self.path_name + "\\" + self.trffic_name + "\\" + \
-                                 self.charact_file_mask + str(self.index_charact_file) + ".csv"
-            if not Path(characts_file_name).exists():
-                pd_ch_name = pd.DataFrame()
-                for ch in CHARACTERISTIC:
-                    pd_ch_name[ch] = []
-                pd_ch_name.to_csv(str(characts_file_name), index=False)
+        if Path(self.path_name).exists():
+            # characts_file_name = self.path_name + "\\" + \
+            #                      self.charact_file_mask + str(self.index_charact_file) + ".csv"
+            # if not Path(characts_file_name).exists():
+                # pd_ch_name = pd.DataFrame()
+                # for ch in CHARACTERISTIC:
+                #     pd_ch_name[ch] = []
+                # pd_ch_name.to_csv(str(characts_file_name), index=False)
 
             self.run_analyz = True
             self.th_main_analyz = Thread(target=self.AnalyzLoop, args=())
@@ -402,11 +386,11 @@ class AnalyzerPackets:
 
 if __name__ == '__main__':
     # Параметры сборщика трафика
-    size_pcap_length            = 10000
-    iface_name                  = "VMware_Network_Adapter_VMnet3"
-    trffic_file_mask            = "traffic_"
-    trffic_name                 = "test_dataset_anomaly"
-    path_name                   = "F:\\VNAT\\Mytraffic\\youtube_me\\"
+    size_pcap_length  = 10000
+    iface_name        = "VMware_Network_Adapter_VMnet3"
+    trffic_file_mask  = "traffic_"
+    path_name         = "F:\\VNAT\\Mytraffic\\youtube_me\\"
+    path_tshark       = "Wireshark\\tshark.exe"
 
     # Дополнительные параметры анализатора трафика
     window_size = 1000
@@ -414,13 +398,13 @@ if __name__ == '__main__':
     charact_file_name = "dataset_"
     ip_client = [IPv4Address("192.168.10.128")]
 
-    sniffer = SnifferTraffic(size_pcap_length, iface_name, trffic_name, trffic_file_mask, path_name)
+    sniffer = SnifferTraffic(size_pcap_length, iface_name, path_tshark, trffic_file_mask, path_name)
     sniffer.run()
     # time.sleep(200)
     # sniffer.stop()
 
     # analizator = AnalyzerPackets(window_size, charact_file_length,
-    #                              charact_file_name, ip_client, path_name, trffic_name)
+    #                              charact_file_name, ip_client, path_name)
     # analizator.run()
 
 

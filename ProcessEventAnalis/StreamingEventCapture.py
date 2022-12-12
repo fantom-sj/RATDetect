@@ -6,20 +6,27 @@ import re
 
 
 class SnifferEventProc:
-    def __init__(self, size_pml_time, event_name, event_file_mask, path_name):
-        self.size_pml_time      = size_pml_time
-        self.event_name         = event_name
-        self.event_file_mask    = event_file_mask
-        self.path_name          = path_name
+    def __init__(self, size_pml_time, event_file_mask, path_procmon, path_procmon_config, path_name):
+        self.size_pml_time          = size_pml_time
+        self.event_file_mask        = event_file_mask
+        self.path_name              = path_name
+        self.path_procmon           = path_procmon
+        self.path_procmon_config    = path_procmon_config
+
+        self.tepm_path = f"{self.path_name}\\temp"
+        if not Path(self.tepm_path).exists():
+            Path(self.tepm_path).mkdir()
 
         self.last_file_id   = None
         self.th_main_sniff  = None
         self.run_sniff      = False
 
-    def __StartProcmonSniff(self, event_file):
-        procmon = ['Procmon64.exe', '/BackingFile', event_file,
-                   '/Runtime', str(self.size_pml_time), '/Minimized',
-                   '/LoadConfig', 'ProcmonConfiguration.pmc']
+    def __StartProcmonSniff__(self, event_file):
+        file_temp_name = f"{self.tepm_path}\\{event_file}"
+
+        procmon = [self.path_procmon, "/BackingFile", file_temp_name,
+                   "/Runtime", str(self.size_pml_time), "/Minimized",
+                   "/LoadConfig", self.path_procmon_config]
 
         startupinfo = sp.STARTUPINFO()
         startupinfo.dwFlags |= sp.STARTF_USESHOWWINDOW
@@ -27,8 +34,10 @@ class SnifferEventProc:
         prog = sp.Popen(procmon, startupinfo=startupinfo)
         prog.communicate()
 
+        Path(file_temp_name).rename(f"{self.path_name}\\{event_file}")
+
     def GetLastFileId(self):
-        path_sniffer_home = Path(self.path_name + "\\" + self.event_name)
+        path_sniffer_home = Path(self.path_name)
         file_arr = []
 
         for file in path_sniffer_home.iterdir():
@@ -43,8 +52,8 @@ class SnifferEventProc:
 
             # Получение индексов файлов с событиями процессов
             for file_name in file_arr:
-                index = file_name.find(self.event_name)
-                index_file = [int(s) for s in re.split('_|.p', file_name[index + 5:]) if s.isdigit()][0]
+                index = file_name.find(self.event_file_mask)
+                index_file = [int(s) for s in re.split('_|.p', file_name[index:]) if s.isdigit()][0]
                 indexs_files_pml.append(index_file)
 
             indexs_files_pml.sort()
@@ -56,10 +65,10 @@ class SnifferEventProc:
         self.last_file_id += 1
 
         while self.run_sniff:
-            event_file = f"{self.path_name}\\{self.event_name}\\{self.event_file_mask}{self.last_file_id}.pml"
+            event_file = f"{self.event_file_mask}{self.last_file_id}.pml"
 
             try:
-                th_sniff = Thread(target=self.__StartProcmonSniff, args=(event_file,))
+                th_sniff = Thread(target=self.__StartProcmonSniff__, args=(event_file,))
                 th_sniff.start()
                 th_sniff.join()
 
@@ -70,8 +79,8 @@ class SnifferEventProc:
 
     def run(self):
         if Path(self.path_name).exists():
-            if not Path(self.path_name + "\\" + self.event_name).exists():
-                Path(self.path_name + "\\" + self.event_name).mkdir()
+            if not Path(self.path_name).exists():
+                Path(self.path_name).mkdir()
 
             self.GetLastFileId()
             print(f"Индекс последнего файла с событиями процессов: {self.last_file_id}")
@@ -89,11 +98,12 @@ class SnifferEventProc:
 
 
 if __name__ == '__main__':
-    # Параметры сборщика трафика
-    size_pml_time   = 10
-    event_name      = "EventTest"
-    event_file_mask = "event_log_"
-    path_name       = "F:\\EVENT"
+    # Параметры сборщика событий
+    size_pml_time       = 10
+    event_file_mask     = "event_log_"
+    path_name           = "F:\\EVENT"
+    path_procmon        = "Procmon64.exe"
+    path_procmon_config = "ProcmonConfiguration.pmc"
 
-    sniffer = SnifferEventProc(size_pml_time, event_name, event_file_mask, path_name)
+    sniffer = SnifferEventProc(size_pml_time, event_file_mask, path_procmon, path_procmon_config, path_name)
     sniffer.run()

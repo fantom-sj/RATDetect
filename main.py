@@ -1,81 +1,89 @@
-import pickle
-import pandas as ps
-from collections import Counter
+from EventAnalysis import EventAnalyser
+from TrafficAnalysis import TrafficAnalyser
+from DecisionSystem import DecisionSystem
 
-from modules.ProcessPreProcessing import ProcPreProcessOne
+from contextlib import redirect_stdout
+from ipaddress import IPv4Address
+from tensorflow import keras
+from threading import Thread
+from elevate import elevate
+from pathlib import Path
 
-ModelForTraffic = "mdl/madel_traffic.mdl"
-ModelForProcess = "mdl/madel_process.mdl"
-
-model_traffic, scaler_traffic, labeler_traffic \
-    = pickle.load(open(ModelForTraffic, "rb"))
-
-model_process, scaler_process, labeler_process \
-    = pickle.load(open(ModelForProcess, "rb"))
-
-
-def EventAnalysis(model, scaler, labeler, data):
-    X = scaler.transform(data)
-    y = model.predict(X)
-    labels = labeler.inverse_transform(y)
-    count = Counter(labels)
-    noRat = count["NoRAT"]
-    Rat   = count["RAT"]
-    return (round(noRat / len(labels) * 1000)/1000), (round(Rat / len(labels) * 1000)/1000)
+import tensorflow as tf
+import matplotlib.pyplot as plt
+import logging
+import time
+import sys
+import os
 
 
-def CsvProcessing(dump_csv):
-    white_list = []
-    gray_list =  []
-    black_list = []
-
-    proc_log = []
-    proc_pid = ""
-    str_num = 0
-    log_data = ps.read_csv(dump_csv)
-    for index, row in log_data.iterrows():
-        if (str_num == 0) and \
-                (row["PID"] not in white_list) and \
-                (row["PID"] not in gray_list) and \
-                (row["PID"] not in black_list):
-            proc_pid = row["PID"]
-            proc_log.append({
-                "Время суток": row["Время суток"],
-                "Операция": row["Операция"],
-                "Путь": row["Путь"],
-                "Результат": row["Результат"],
-                "Подробности": row["Подробности"]
-            })
-            str_num += 1
-        elif 0 < str_num < 100:
-            if row["PID"] == proc_pid:
-                proc_log.append({
-                    "Время суток": row["Время суток"],
-                    "Операция": row["Операция"],
-                    "Путь": row["Путь"],
-                    "Результат": row["Результат"],
-                    "Подробности": row["Подробности"]
-                })
-                str_num += 1
-            else:
-                continue
-
-        elif str_num == 100:
-            str_num = 0
-            data_process = ProcPreProcessOne(proc_log)
-
-            res = EventAnalysis(model_process, scaler_process, labeler_process, data_process)
-            print(res)
-
-
-
-
-
-
-
+def NeiroNetLoad(path_net_traffic, path_net_event):
+    check_net_traffic = Path(path_net_traffic).exists()
+    check_net_event   = Path(path_net_event).exists()
+    if (not check_net_traffic) or (not check_net_event):
+        err_net_traffic = f"Указанный путь {path_net_traffic} для нейросети анализа трафика не найден!\n"
+        err_net_event   = f"Указанный путь {path_net_traffic} для нейросети анализа процессов системы не найден!\n"
+        prompt          = "Укажите верные пути и перезапустите систему анализа."
+        if not check_net_traffic: logging.exception(err_net_traffic)
+        if not check_net_event:   logging.exception(err_net_event)
+        logging.info(prompt)
+        exit(-1)
+    else:
+        with tf.name_scope("NetTraffic") as scope:
+            NetTraffic = keras.models.load_model(path_net_traffic)
+            print("Нейросеть для анализа сетевого трафика загружена")
+        with tf.name_scope("NetEvent") as scope:
+            NetEvent   = keras.models.load_model(path_net_event)
+            print("Нейросеть для анализа процессов системы загружена")
+        return NetTraffic, NetEvent
 
 
 if __name__ == '__main__':
-    main()
+    # elevate()
 
-    # '.\Procmon64.exe /BackingFile "Log.pml" /Runtime 10'
+    path_net_traffic = "AnomalyDetector\\modeles\\TrafficAnomalyDetector\\0.8.7.1\\model_TAD_v0.8.7.1"
+    path_net_event   = "AnomalyDetector\\modeles\\EventAnomalyDetector\\0.4.7.1_LSTM\\Checkpoint\\epoch_1"
+
+    path_traffic_analysis = "WorkDirectory\\"
+    path_event_analysis   = "\\\\VICTIMPC\\RATDetect\\WorkDirectory"
+
+    iface_name = "VMware_Network_Adapter_VMnet3"
+    ip_client = [IPv4Address("192.168.10.128")]
+
+    if not Path("WorkDirectory\\").exists():
+        Path("WorkDirectory\\").mkdir()
+    if not Path(path_traffic_analysis).exists():
+        Path(path_traffic_analysis).mkdir()
+    if not Path(path_event_analysis).exists():
+        try:
+            Path(path_event_analysis).mkdir()
+        except:
+            print("Защищаемая машина отключена!")
+
+    NetTraffic, NetEvent = NeiroNetLoad(path_net_traffic, path_net_event)
+
+    buffer_traffic      = []
+    buffer_events       = []
+    buffer_anomaly_proc = []
+
+    traffic_analysis = TrafficAnalyser(buffer_traffic, NetTraffic, path_traffic_analysis,
+                                       iface_name, ip_client)
+
+    event_analysis = EventAnalyser(buffer_events, NetEvent, path_event_analysis)
+
+    decision_system = DecisionSystem(buffer_traffic, buffer_events, buffer_anomaly_proc)
+
+    traffic_analysis.start()
+    event_analysis.start()
+    decision_system.start()
+
+    while True:
+        if len(buffer_anomaly_proc) > 0:
+            os.system("echo ---------------------------------------")
+            interim_results = buffer_anomaly_proc.pop(0)
+            for anomaly in interim_results:
+
+                out = f"{anomaly}: {interim_results[anomaly]}"
+                os.system("echo " + out)
+
+        time.sleep(10)

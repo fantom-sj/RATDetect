@@ -3,8 +3,13 @@
     а также набор характеристик каждого события, необходимых для
     расчёта набора CHARACTERISTIC_EVENTS
 """
+
+from ipaddress import IPv4Address, AddressValueError
 from ProcmonParser.consts import EventClass
 from statistics import mean, pstdev
+from socket import gethostbyname, gaierror, getservbyname
+
+import logging
 
 
 CHARACTERISTIC_EVENTS = [
@@ -12,6 +17,7 @@ CHARACTERISTIC_EVENTS = [
     "Time_Stamp_Start",      # 0. Временная метка начала порции
     "Time_Stamp_End",        # 1. Временная метка конца порции
     "Process_Name",          # 2. Имя процесса
+    "Direction_IP_Port",     # 3. Уникальные направления сетевых инициализаций (IP и порт назначения)
     "Count_Events_Batch",    # 3. Количество событий в порции
 
     "Count_Success_Events",  # 4. Количество успешных событий
@@ -277,150 +283,15 @@ FilesystemPnpOperation = [
 
 
 def CulcCharactsEventsOnWindow(events, user_dir):
-    characts = {
-        # Общие сведенья о порции событий
-        "Time_Stamp_Start":     events[0]["Date & Time"],
-        "Time_Stamp_End":       events[-1]["Date & Time"],
-        "Process_Name":         events[-1]["Process Name"],
-        "Count_Events_Batch":   len(events),
-        "Count_Success_Events": 0,      #+
+    characts = {}
+    for ch in CHARACTERISTIC_EVENTS:
+        characts[ch] = 0
 
-        # Количество событий разной класса
-        "Count_Event_Process":     0,   #+
-        "Count_Event_Registry":    0,   #+
-        "Count_Event_File_System": 0,   #+
-        "Count_Event_Network":     0,   #+
-
-        # Данные по категории событий: чтение и запись данных процессом
-        "Count_event_Read":        0,   #+
-        "Count_event_Read_MetaD":  0,   #+
-        "Count_event_Write":       0,   #+
-        "Count_event_Write_MetaD": 0,   #+
-
-        # Основные события работы с файловой системой
-        "Count_ReadFile":   0,   #+
-        "Count_CreateFile": 0,   #+
-        "Count_WriteFile":  0,   #+
-        "Count_CloseFile":  0,   #+
-
-        # Дополнительные события работы с файловой системой
-        "Count_VolumeDismount":          0,   #+
-        "Count_VolumeMount":             0,   #+
-        "Count_QueryOpen":               0,   #+
-        "Count_CreateFileMapping":       0,   #+
-        "Count_CreatePipe":              0,   #+
-        "Count_QueryInformationFile":    0,   #+
-        "Count_SetInformationFile":      0,   #+
-        "Count_QueryEAFile":             0,   #+
-        "Count_SetEAFile":               0,   #+
-        "Count_FlushBuffersFile":        0,   #+
-        "Count_QueryVolumeInformation":  0,   #+
-        "Count_SetVolumeInformation":    0,   #+
-        "Count_DirectoryControl":        0,   #+
-        "Count_FileSystemControl":       0,   #+
-        "Count_DeviceIoControl":         0,   #+
-        "Count_InternalDeviceIoControl": 0,   #+
-        "Count_LockUnlockFile":          0,   #+
-        "Count_CreateMailSlot":          0,   #+
-        "Count_QuerySecurityFile":       0,   #+
-        "Count_SetSecurityFile":         0,   #+
-        "Count_SystemControl":           0,   #+
-        "Count_DeviceChange":            0,   #+
-        "Count_QueryFileQuota":          0,   #+
-        "Count_SetFileQuota":            0,   #+
-        "Count_PlugAndPlay":             0,   #+
-
-        # Количество событий относящихся к файловой системе, и различным подкатегориям взаимодействия с ней
-        "Count_FilesystemQueryVolumeInformationOperation":  0,   #+
-        "Count_FilesystemSetVolumeInformationOperation":    0,   #+
-        "Count_FilesystemQueryInformationOperation":        0,   #+
-        "Count_FilesystemSetInformationOperation":          0,   #+
-        "Count_FilesystemDirectoryControlOperation":        0,   #+
-        "Count_FilesystemPnpOperation":                     0,   #+
-
-        # Статистические характеристики относящиеся к работе с файловой системой
-        "Count_Unique_Path":    0,   #+
-        "Count_Read_Length":    0,   #+
-        "Count_Write_Length":   0,   #+
-        "Max_Read_Length":      0,   #+
-        "Min_Read_Length":      0,   #+
-        "Mean_Read_Length":     0,   #+
-        "Std_Dev_Read_Length":  0,   #+
-        "Max_Write_Length":     0,   #+
-        "Min_Write_Length":     0,   #+
-        "Mean_Write_Length":    0,   #+
-        "Std_Dev_Write_Length": 0,   #+
-
-        # Колличесво обращений к различным ключевым каталогам системы
-        "Appeal_to_system32":     0,   #+
-        "Appeal_to_ProgramData":  0,   #+
-        "Appeal_to_ProgramFiles": 0,   #+
-        "Appeal_to_UserDir":      0,   #+
-
-        # Количество событий различных событий реестра
-        "Count_Reg_OpenKey":                  0,   #+
-        "Count_Reg_CreateKey":                0,   #+
-        "Count_Reg_CloseKey":                 0,   #+
-        "Count_Reg_QueryKey":                 0,   #+
-        "Count_Reg_SetValue":                 0,   #+
-        "Count_Reg_QueryValue":               0,   #+
-        "Count_Reg_EnumValue":                0,   #+
-        "Count_Reg_EnumKey":                  0,   #+
-        "Count_Reg_SetInfoKey":               0,   #+
-        "Count_Reg_DeleteKey":                0,   #+
-        "Count_Reg_DeleteValue":              0,   #+
-        "Count_Reg_FlushKey":                 0,   #+
-        "Count_Reg_LoadKey":                  0,   #+
-        "Count_Reg_UnloadKey":                0,   #+
-        "Count_Reg_RenameKey":                0,   #+
-        "Count_Reg_QueryMultipleValueKey":    0,   #+
-        "Count_Reg_SetKeySecurity":           0,   #+
-        "Count_Reg_QueryKeySecurity":         0,   #+
-        "Count_Unique_Reg_Path":              0,   #+
-
-        # Колличесво обращений к различным корневым веткам реестра
-        "Appeal_reg_HKCR": 0,   #+
-        "Appeal_reg_HKCU": 0,   #+
-        "Appeal_reg_HKLM": 0,   #+
-        "Appeal_reg_HKU":  0,   #+
-        "Appeal_reg_HKCC": 0,   #+
-
-        # Количество сетевых событий различных типов
-        "Count_Net_Connect":    0,   #+
-        "Count_Net_Disconnect": 0,   #+
-        "Count_Net_Send":       0,   #+
-        "Count_Net_Receive":    0,   #+
-        "Count_Net_Accept":     0,   #+
-        "Count_Net_Reconnect":  0,   #+
-        "Count_Net_Retransmit": 0,   #+
-        "Count_Net_TCPCopy":    0,   #+
-        "Count_TCP_Events":     0,   #+
-        "Count_UDP_Events":     0,   #+
-
-        # Статистические характеристики сетевых событий в рамках порции
-        "Count_Send_Length":        0,   #+
-        "Max_Send_Length":          0,   #+
-        "Min_Send_Length":          0,   #+
-        "Mean_Send_Length":         0,   #+
-        "Std_Dev_Send_Length":      0,   #+
-        "Count_Receive_Length":     0,   #+
-        "Max_Receive_Length":       0,   #+
-        "Min_Receive_Length":       0,   #+
-        "Mean_Receive_Length":      0,   #+
-        "Std_Dev_Receive_Length":   0,   #+
-        "Count_Unique_Recipients":  0,   #+
-        "Count_Unique_Ports_src":   0,   #+
-        "Count_Unique_Ports_dst":   0,   #+
-
-        # Количество событий процессов различных типов
-        "Count_Process_Defined":   0,   #+
-        "Count_Thread_Create":     0,   #+
-        "Count_Thread_Exit":       0,   #+
-        "Count_Load_Image":        0,   #+
-        "Count_Thread_Profile":    0,   #+
-        "Count_Process_Start":     0,   #+
-        "Count_System_Statistics": 0    #+
-    }
+    characts["Time_Stamp_Start"]    = events[0]["Date & Time"]
+    characts["Time_Stamp_End"]      = events[-1]["Date & Time"]
+    characts["Process_Name"]        = events[-1]["Process Name"]
+    characts["Direction_IP_Port"]   = None
+    characts["Count_Events_Batch"]  = len(events)
 
     Arr_Unique_Path             = []
     Arr_Read_Length             = []
@@ -435,138 +306,175 @@ def CulcCharactsEventsOnWindow(events, user_dir):
     Arr_Receive_Length          = []
 
     for i in range(len(events)):
-        if events[i]["Result"] == 0:
-            characts["Count_Success_Events"] += 1
+        try:
+            if events[i]["Result"] == 0:
+                characts["Count_Success_Events"] += 1
 
-        if "Read" in events[i]["Category"]:
-            if "Meta" in events[i]["Category"]:
-                characts["Count_event_Read_MetaD"] += 1
-            else:
-                characts["Count_event_Read"] += 1
-        elif "Write" in events[i]["Category"]:
-            if "Meta" in events[i]["Category"]:
-                characts["Count_event_Write_MetaD"] += 1
-            else:
-                characts["Count_event_Write"] += 1
+            if "Read" in events[i]["Category"]:
+                if "Meta" in events[i]["Category"]:
+                    characts["Count_event_Read_MetaD"] += 1
+                else:
+                    characts["Count_event_Read"] += 1
+            elif "Write" in events[i]["Category"]:
+                if "Meta" in events[i]["Category"]:
+                    characts["Count_event_Write_MetaD"] += 1
+                else:
+                    characts["Count_event_Write"] += 1
 
-        if events[i]["Event Class"] == EventClass.Process:
-            characts["Count_Event_Process"] += 1
+            if events[i]["Event Class"] == EventClass.Process:
+                characts["Count_Event_Process"] += 1
 
-            if "Defined" in events[i]["Operation"]:
-                characts["Count_Process_Defined"] += 1
-            elif "Create" in events[i]["Operation"]:
-                characts["Count_Thread_Create"] += 1
-            elif "Exit" in events[i]["Operation"]:
-                characts["Count_Thread_Exit"] += 1
-            elif "Image" in events[i]["Operation"]:
-                characts["Count_Load_Image"] += 1
-            elif "Profile" in events[i]["Operation"]:
-                characts["Count_Thread_Profile"] += 1
-            elif "Start" in events[i]["Operation"]:
-                characts["Count_Process_Start"] += 1
-            elif "Statistics" in events[i]["Operation"]:
-                characts["Count_System_Statistics"] += 1
+                if "Defined" in events[i]["Operation"]:
+                    characts["Count_Process_Defined"] += 1
+                elif "Create" in events[i]["Operation"]:
+                    characts["Count_Thread_Create"] += 1
+                elif "Exit" in events[i]["Operation"]:
+                    characts["Count_Thread_Exit"] += 1
+                elif "Image" in events[i]["Operation"]:
+                    characts["Count_Load_Image"] += 1
+                elif "Profile" in events[i]["Operation"]:
+                    characts["Count_Thread_Profile"] += 1
+                elif "Start" in events[i]["Operation"]:
+                    characts["Count_Process_Start"] += 1
+                elif "Statistics" in events[i]["Operation"]:
+                    characts["Count_System_Statistics"] += 1
 
-        elif events[i]["Event Class"] == EventClass.Registry:
-            characts["Count_Event_Registry"] += 1
+            elif events[i]["Event Class"] == EventClass.Registry:
+                characts["Count_Event_Registry"] += 1
 
-            if not events[i]["Path"] in Arr_Unique_Reg_Path:
-                Arr_Unique_Reg_Path.append(events[i]["Path"])
+                if not events[i]["Path"] in Arr_Unique_Reg_Path:
+                    Arr_Unique_Reg_Path.append(events[i]["Path"])
 
-            for ch in CHARACTERISTIC_EVENTS[69:87]:
-                if ch[10:] in events[i]["Operation"]:
-                    characts[ch] += 1
+                for ch in CHARACTERISTIC_EVENTS[69:87]:
+                    if ch[10:] in events[i]["Operation"]:
+                        characts[ch] += 1
 
-            if "HKCR" in events[i]["Path"]:
-                characts["Appeal_reg_HKCR"] += 1
-            elif "HKCU" in events[i]["Path"]:
-                characts["Appeal_reg_HKCU"] += 1
-            elif "HKLM" in events[i]["Path"]:
-                characts["Appeal_reg_HKLM"] += 1
-            elif "HKU" in events[i]["Path"]:
-                characts["Appeal_reg_HKU"] += 1
-            elif "HKCC" in events[i]["Path"]:
-                characts["Appeal_reg_HKCC"] += 1
+                if "HKCR" in events[i]["Path"]:
+                    characts["Appeal_reg_HKCR"] += 1
+                elif "HKCU" in events[i]["Path"]:
+                    characts["Appeal_reg_HKCU"] += 1
+                elif "HKLM" in events[i]["Path"]:
+                    characts["Appeal_reg_HKLM"] += 1
+                elif "HKU" in events[i]["Path"]:
+                    characts["Appeal_reg_HKU"] += 1
+                elif "HKCC" in events[i]["Path"]:
+                    characts["Appeal_reg_HKCC"] += 1
 
-        elif events[i]["Event Class"] == EventClass.File_System:
-            characts["Count_Event_File_System"] += 1
+            elif events[i]["Event Class"] == EventClass.File_System:
+                characts["Count_Event_File_System"] += 1
 
-            if not events[i]["Path"] in Arr_Unique_Path:
-                Arr_Unique_Path.append(events[i]["Path"])
+                if not events[i]["Path"] in Arr_Unique_Path:
+                    Arr_Unique_Path.append(events[i]["Path"])
 
-            if "Read" in events[i]["Operation"]:
-                characts["Count_ReadFile"] += 1
+                if "Read" in events[i]["Operation"]:
+                    characts["Count_ReadFile"] += 1
+                    if "Length" in events[i]["Detail"]:
+                        Arr_Read_Length.append(float(str(events[i]["Detail"]["Length"]).replace(",", "")))
+                elif "Create" in events[i]["Operation"]:
+                    characts["Count_CreateFile"] += 1
+                elif "Write" in events[i]["Operation"]:
+                    characts["Count_WriteFile"] += 1
+                    if "Length" in events[i]["Detail"]:
+                        Arr_Write_Length.append(float(str(events[i]["Detail"]["Length"]).replace(",", "")))
+                elif "Close" in events[i]["Operation"]:
+                    characts["Count_CloseFile"] += 1
+
+                for ch in CHARACTERISTIC_EVENTS[22:48]:
+                    if ch[6:] in events[i]["Operation"]:
+                        characts[ch] += 1
+
+                if events[i]["Operation"] in FilesystemQueryVolumeInformationOperation:
+                    characts["Count_FilesystemQueryVolumeInformationOperation"] += 1
+                elif events[i]["Operation"] in FilesystemSetVolumeInformationOperation:
+                    characts["Count_FilesystemSetVolumeInformationOperation"] += 1
+                elif events[i]["Operation"] in FilesystemQueryInformationOperation:
+                    characts["Count_FilesystemQueryInformationOperation"] += 1
+                elif events[i]["Operation"] in FilesystemSetInformationOperation:
+                    characts["Count_FilesystemSetInformationOperation"] += 1
+                elif events[i]["Operation"] in FilesystemDirectoryControlOperation:
+                    characts["Count_FilesystemDirectoryControlOperation"] += 1
+                elif events[i]["Operation"] in FilesystemPnpOperation:
+                    characts["Count_FilesystemPnpOperation"] += 1
+
+                if "Windows\\System32" in events[i]["Path"]:
+                    characts["Appeal_to_system32"] += 1
+                elif "ProgramData" in events[i]["Path"]:
+                    characts["Appeal_to_ProgramData"] += 1
+                elif "Program Files" in events[i]["Path"]:
+                    characts["Appeal_to_ProgramFiles"] += 1
+                elif user_dir in events[i]["Path"]:
+                    characts["Appeal_to_UserDir"] += 1
+
+            elif events[i]["Event Class"] == EventClass.Network:
+                characts["Count_Event_Network"] += 1
+
+                src_dst = str(events[i]["Path"]).split(" -> ")
+                if len(src_dst) == 2:
+                    idx_spr_port_src = str(src_dst[0]).rfind(":")
+                    if idx_spr_port_src != -1:
+                        port_src = src_dst[0][idx_spr_port_src+1:]
+                        if not port_src in Arr_Unique_Ports_src:
+                            Arr_Unique_Ports_src.append(port_src)
+
+                    idx_spr_ip_dst = str(src_dst[1]).rfind(":")
+                    if idx_spr_ip_dst != -1:
+                        direction_chek = False
+
+                        ip_dst_str = src_dst[1][:idx_spr_ip_dst]
+                        try:
+                            ip_dst = str(IPv4Address(ip_dst_str))
+                            direction_chek = True
+                        except AddressValueError as err:
+                            # logging.exception(err)
+                            try:
+                                ip_dst = gethostbyname(ip_dst_str)
+                                direction_chek = True
+                            except gaierror as err2:
+                                ip_dst = ip_dst_str
+                                # logging.exception(err2)
+
+                        port_dst_str = src_dst[1][idx_spr_ip_dst+1:]
+                        port_dst = None
+                        try:
+                            port_dst = int(port_dst_str)
+                        except ValueError:
+                            try:
+                                if "TCP" in events[i]["Operation"]:
+                                    port_dst = getservbyname(port_dst_str, "tcp")
+                                elif "UDP" in events[i]["Operation"]:
+                                    port_dst = getservbyname(port_dst_str, "udp")
+                            except OSError:
+                                port_dst = port_dst_str
+
+                        if direction_chek:
+                            direction = ip_dst + ":" + str(port_dst)
+                            if characts["Direction_IP_Port"] is None:
+                                characts["Direction_IP_Port"] = direction
+                            elif not direction in characts["Direction_IP_Port"]:
+                                characts["Direction_IP_Port"] += (";" + direction)
+
+                        if not ip_dst in Arr_Unique_Recipients:
+                            Arr_Unique_Recipients.append(ip_dst)
+                        if not port_dst in Arr_Unique_Ports_dst:
+                            Arr_Unique_Ports_dst.append(port_dst)
+
+                for ch in CHARACTERISTIC_EVENTS[93:101]:
+                    if ch[10:] in events[i]["Operation"]:
+                        characts[ch] += 1
+
+                if "TCP" in events[i]["Operation"]:
+                    characts["Count_TCP_Events"] += 1
+                elif "UDP" in events[i]["Operation"]:
+                    characts["Count_UDP_Events"] += 1
+
                 if "Length" in events[i]["Detail"]:
-                    Arr_Read_Length.append(float(str(events[i]["Detail"]["Length"]).replace(",", "")))
-            elif "Create" in events[i]["Operation"]:
-                characts["Count_CreateFile"] += 1
-            elif "Write" in events[i]["Operation"]:
-                characts["Count_WriteFile"] += 1
-                if "Length" in events[i]["Detail"]:
-                    Arr_Write_Length.append(float(str(events[i]["Detail"]["Length"]).replace(",", "")))
-            elif "Close" in events[i]["Operation"]:
-                characts["Count_CloseFile"] += 1
+                    if "Send" in events[i]["Operation"]:
+                        Arr_Send_Length.append(float(str(events[i]["Detail"]["Length"]).replace(",", "")))
+                    elif "Receive" in events[i]["Operation"]:
+                        Arr_Receive_Length.append(float(str(events[i]["Detail"]["Length"]).replace(",", "")))
 
-            for ch in CHARACTERISTIC_EVENTS[22:48]:
-                if ch[6:] in events[i]["Operation"]:
-                    characts[ch] += 1
-
-            if events[i]["Operation"] in FilesystemQueryVolumeInformationOperation:
-                characts["Count_FilesystemQueryVolumeInformationOperation"] += 1
-            elif events[i]["Operation"] in FilesystemSetVolumeInformationOperation:
-                characts["Count_FilesystemSetVolumeInformationOperation"] += 1
-            elif events[i]["Operation"] in FilesystemQueryInformationOperation:
-                characts["Count_FilesystemQueryInformationOperation"] += 1
-            elif events[i]["Operation"] in FilesystemSetInformationOperation:
-                characts["Count_FilesystemSetInformationOperation"] += 1
-            elif events[i]["Operation"] in FilesystemDirectoryControlOperation:
-                characts["Count_FilesystemDirectoryControlOperation"] += 1
-            elif events[i]["Operation"] in FilesystemPnpOperation:
-                characts["Count_FilesystemPnpOperation"] += 1
-
-            if "Windows\\System32" in events[i]["Path"]:
-                characts["Appeal_to_system32"] += 1
-            elif "ProgramData" in events[i]["Path"]:
-                characts["Appeal_to_ProgramData"] += 1
-            elif "Program Files" in events[i]["Path"]:
-                characts["Appeal_to_ProgramFiles"] += 1
-            elif user_dir in events[i]["Path"]:
-                characts["Appeal_to_UserDir"] += 1
-
-        elif events[i]["Event Class"] == EventClass.Network:
-            characts["Count_Event_Network"] += 1
-
-            src_dst = str(events[i]["Path"]).split(" -> ")
-            if len(src_dst) == 2:
-                idx_spr_port_src = str(src_dst[0]).rfind(":")
-                if idx_spr_port_src != -1:
-                    port_src = src_dst[0][idx_spr_port_src+1:]
-                    if not port_src in Arr_Unique_Ports_src:
-                        Arr_Unique_Ports_src.append(port_src)
-
-                idx_spr_ip_dst = str(src_dst[1]).rfind(":")
-                if idx_spr_ip_dst != -1:
-                    ip_dst   = src_dst[1][:idx_spr_port_src]
-                    port_dst = src_dst[1][idx_spr_port_src+1:]
-                    if not ip_dst in Arr_Unique_Recipients:
-                        Arr_Unique_Recipients.append(ip_dst)
-                    if not port_dst in Arr_Unique_Ports_dst:
-                        Arr_Unique_Ports_dst.append(port_dst)
-
-            for ch in CHARACTERISTIC_EVENTS[93:101]:
-                if ch[10:] in events[i]["Operation"]:
-                    characts[ch] += 1
-
-            if "TCP" in events[i]["Operation"]:
-                characts["Count_TCP_Events"] += 1
-            elif "UDP" in events[i]["Operation"]:
-                characts["Count_UDP_Events"] += 1
-
-            if "Length" in events[i]["Detail"]:
-                if "Send" in events[i]["Operation"]:
-                    Arr_Send_Length.append(float(str(events[i]["Detail"]["Length"]).replace(",", "")))
-                elif "Receive" in events[i]["Operation"]:
-                    Arr_Receive_Length.append(float(str(events[i]["Detail"]["Length"]).replace(",", "")))
+        except:
+            continue
 
     characts["Count_Unique_Path"]       = len(Arr_Unique_Path)
     characts["Count_Unique_Reg_Path"]   = len(Arr_Unique_Reg_Path)

@@ -11,37 +11,42 @@ import numpy as np
 import logging
 import dpkt
 
-CHARACTERISTIC = [
-    "Time_Stamp",               # 0. Временная метка пакета, с приходом которого были рассчитаны характеристики
-    "Max_IP_dst_count",         # 1. Максимальное количество пакетов с одинаковым IP получателя
-    "Max_Port_src_count",       # 2. Максимальное количество пакетов с одинаковым портом источника
-    "Max_Port_dst_count",       # 3. Максимальное количество пакетов с одинаковым портом получателя
-    
-    "Count_TCP_pakets",         # 4. Количество пакетов переданных по TCP протоколу
-    "Count_UDP_pakets",         # 5. Количество пакетов переданных по UDP протоколу
-    "Count_src_is_dst_ports",   # 6. Количество пакетов с одинаковыми портами источника и назначения
-    
-    "Avg_size_TCP_paket",       # 7. Средний размер пакета переданного по протоколу TCP
-    "Avg_size_UDP_paket",       # 8. Средний размер пакета переданного по протоколу UDP
+EPOCH_AS_FILETIME = 116444736000000000  # January 1, 1970 as MS file time
+HUNDREDS_OF_NANOSECONDS = 10000000
 
-    "Dev_size_TCP_paket",       # 9. Стандартное отклонение размера пакета переданного по протоколу TCP
-    "Dev_size_UDP_paket",       # 10. Стандартное отклонение размера пакета переданного по протоколу UDP
+CHARACTERISTIC_FLOW = [
+    # Общие характеристики потока
+    "Time_Stamp_Start",         # 0. Временная метка начала потока
+    "Time_Stamp_End",           # 1. Временная метка конца потока
+    "Direction_IP_Port",        # 2. Уникальные направления пакетов в выборке (IP и порт назначения)
+    "Max_IP_dst_count",         # 3. Максимальное количество пакетов с одинаковым IP получателя
+    "Max_Port_src_count",       # 4. Максимальное количество пакетов с одинаковым портом источника
+    "Max_Port_dst_count",       # 5. Максимальное количество пакетов с одинаковым портом получателя
     
-    "Avg_client_paket_size",    # 11. Средний размер пакета переданного клиентом
-    "Avg_server_paket_size",    # 12. Средний размер пакета переданного сервером
+    "Count_TCP_pakets",         # 6. Количество пакетов переданных по TCP протоколу
+    "Count_UDP_pakets",         # 7. Количество пакетов переданных по UDP протоколу
+    "Count_src_is_dst_ports",   # 8. Количество пакетов с одинаковыми портами источника и назначения
     
-    "Dev_client_paket_size",    # 13. Стандартное отклонение размера пакета переданного клиентом
-    "Dev_server_paket_size",    # 14. Стандартное отклонение размера пакета переданного сервером
-    
-    "Size_client_bytes",        # 15. Количество байт переданных клиентом в заданном окне
-    "Size_server_bytes",        # 16. Количество байт переданных сервером в заданном окне
-    "Size_difference",          # 17. Разница размеров переданных данных клиентом и сервером
+    "Avg_size_TCP_paket",       # 9. Средний размер пакета переданного по протоколу TCP
+    "Avg_size_UDP_paket",       # 10. Средний размер пакета переданного по протоколу UDP
 
-    "Count_syn_flag",           # 18. Количество пакетов с установленными syn флагами
-    "Count_ask_flag",           # 19. Количество пакетов с установленными ask флагами
-    "Count_syn_ask_flag"        # 20. Количество пакетов с установленными syn и ask флагами
+    "Dev_size_TCP_paket",       # 11. Стандартное отклонение размера пакета переданного по протоколу TCP
+    "Dev_size_UDP_paket",       # 12. Стандартное отклонение размера пакета переданного по протоколу UDP
+    
+    "Avg_client_paket_size",    # 13. Средний размер пакета переданного клиентом
+    "Avg_server_paket_size",    # 14. Средний размер пакета переданного сервером
+    
+    "Dev_client_paket_size",    # 15. Стандартное отклонение размера пакета переданного клиентом
+    "Dev_server_paket_size",    # 16. Стандартное отклонение размера пакета переданного сервером
+    
+    "Size_client_bytes",        # 17. Количество байт переданных клиентом в заданном окне
+    "Size_server_bytes",        # 18. Количество байт переданных сервером в заданном окне
+    "Size_difference",          # 19. Разница размеров переданных данных клиентом и сервером
+
+    "Count_syn_flag",           # 20. Количество пакетов с установленными syn флагами
+    "Count_ask_flag",           # 21. Количество пакетов с установленными ask флагами
+    "Count_syn_ask_flag"        # 22. Количество пакетов с установленными syn и ask флагами
 ]
-
 
 BASE_CHARACTERISTIC = [
     "timestamp",            # Временная метка пакета
@@ -153,7 +158,16 @@ def CulcCharactsOnWindow(array_paket, window_size, ip_client):
     arr_ask_flag        = []
     arr_syn_ask_flag    = []
 
+    Direction_IP_Port   = None
+
     for pkt in array_paket:
+        if not IPv4Address(pkt["ip_dst"]) in ip_client:
+            direction = str(IPv4Address(pkt["ip_dst"])) + ":" + str(pkt["port_dst"])
+            if Direction_IP_Port is None:
+                Direction_IP_Port = direction
+            elif not direction in Direction_IP_Port:
+                Direction_IP_Port += (";" + direction)
+
         arr_ip_src.append(IPv4Address(pkt["ip_src"]))
         arr_ip_dst.append(IPv4Address(pkt["ip_dst"]))
         arr_port_src.append(pkt["port_src"])
@@ -169,7 +183,8 @@ def CulcCharactsOnWindow(array_paket, window_size, ip_client):
             arr_syn_ask_flag.append(1)
 
     # Устанавливаем временную метку пакета, с приходом которого были рассчитаны характеристики
-    Time_Stamp = array_paket[-1]["timestamp"]
+    Time_Stamp_Start = round(array_paket[0]["timestamp"] * HUNDREDS_OF_NANOSECONDS + EPOCH_AS_FILETIME)
+    Time_Stamp_End   = round(array_paket[-1]["timestamp"] * HUNDREDS_OF_NANOSECONDS + EPOCH_AS_FILETIME)
 
     # Посчитываем максимальное количество пакетов с одинаковым IP получателя:
     count_ip_dst = Counter(arr_ip_dst)
@@ -272,7 +287,9 @@ def CulcCharactsOnWindow(array_paket, window_size, ip_client):
     Count_syn_ask_flag  = sum(arr_syn_ask_flag)
 
     characts_on_window = {
-        "Time_Stamp": Time_Stamp,
+        "Time_Stamp_Start": Time_Stamp_Start,
+        "Time_Stamp_End": Time_Stamp_End,
+        "Direction_IP_Port": Direction_IP_Port,
         "Max_IP_dst_count": Max_IP_dst_count,
         "Max_Port_src_count": Max_Port_src_count,
         "Max_Port_dst_count": Max_Port_dst_count,

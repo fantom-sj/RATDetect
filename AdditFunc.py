@@ -132,7 +132,7 @@ def merge_csv(path, csv_file_arr):
 
 
 def print_anomaly():
-    versia = "0.4.2_LSTM"
+    versia                 = "0.4.7.1_LSTM"
     real_anomaly_file      = "AnomalyDetector\\modeles\\EventAnomalyDetector\\" + versia + "\\res_real_anomaly.csv"
     prognoses_anomaly_file = "AnomalyDetector\\modeles\\EventAnomalyDetector\\" + versia + "\\res_prognoses_anomaly.csv"
 
@@ -141,41 +141,73 @@ def print_anomaly():
 
     color_RAT = {"NingaliNET": "tab:red", "Rabbit-Hole": "tab:green", "Revenge-RAT": "tab:purple"}
 
+    count_RAT = 0
+    anomaly_intens = []
+    for idx in range(len(real_anomaly["NingaliNET"])):
+        anomaly_intens.append(real_anomaly["NingaliNET"][idx] +
+                              real_anomaly["Rabbit-Hole"][idx] + real_anomaly["Revenge-RAT"][idx])
+        for RAT in color_RAT:
+            if real_anomaly[RAT][idx] > 0:
+                count_RAT += 1
+
+    count_no_RAT=len((real_anomaly["NingaliNET"])) - count_RAT
+
+    mng = plt.get_current_fig_manager()
+    mng.window.showMaximized()
+
+    plt.xlim([-5.0, len(real_anomaly["NingaliNET"])])
+    plt.ylim([-5.0, 105.0])
+    plt.title(f"График интенсивности аномальных процессов")
+    plt.grid(which='major')
+    plt.grid(which='minor', linestyle=':')
+
     for RAT in real_anomaly:
         print(RAT)
+        plt.plot(real_anomaly[RAT], label=RAT, color=color_RAT[RAT])
 
+    plt.legend(fontsize=10)
+    plt.tight_layout()
+    plt.show()
+
+    porog = 0.0888
     for epoch in prognoses_anomaly:
+        mng = plt.get_current_fig_manager()
+        mng.window.showMaximized()
 
-        # plt.xlim([-5.0, len(epoch) + 5])
-        # plt.ylim([-5.0, 105.0])
+        false_positive = 0
+        false_negative = 0
+        true_positive = 0
+        true_negative = 0
+
+        for i in range(len(prognoses_anomaly[epoch])):
+            if prognoses_anomaly[epoch][i] > porog:
+                if anomaly_intens[i] > 0:
+                    true_positive += 1
+                else:
+                    false_positive += 1
+            else:
+                if anomaly_intens[i] > 0:
+                    false_negative += 1
+                else:
+                    true_negative += 1
+
+        print(f"\nВсего RAT-троянов:             {count_RAT}")
+        print(f"Всего нормальных событий:      {count_no_RAT}")
+        print(f"Правильно-позитивная реакция:  {true_positive},\t\tсоотношение: {(true_positive/count_RAT):.3f}")
+        print(f"Правильно-негативная реакция:  {true_negative},\t\tсоотношение: {(true_negative/count_no_RAT):.3f}")
+        print(f"Ложно-позитивная реакция:      {false_positive},\t\tсоотношение: {(false_positive/count_RAT):.3f}")
+        print(f"Ложно-негативная реакция:      {false_negative},\t\t\tсоотношение: {(false_negative/count_no_RAT):.3f}")
 
         plt.title(f"График интенсивности аномальных событий процессов")
         plt.grid(which='major')
         plt.grid(which='minor', linestyle=':')
 
-        fig = plt.figure()
-        ax = fig.subplots()
         plt.ylim([0.02, 0.13])
-        p, = ax.plot(prognoses_anomaly[epoch], label=epoch, color="tab:blue")
-        ax.legend(fontsize=10)
-        plt.subplots_adjust(bottom=0.25)
-
-        ax_slide = plt.axes([0.25, 0.01, 0.65, 0.05])
-        win_size = Slider(ax_slide, 'Window size', valmin=5, valmax=99, valinit=99, valstep=2)
-
-        def update(val):
-            current_v = int(win_size.val)
-            new_y = savgol_filter(prognoses_anomaly[epoch], current_v, 3)
-            p.set_ydata(new_y)
-            fig.canvas.draw()
-
-        # for RAT in real_anomaly:
-        #     if RAT == "Unnamed: 0":
-        #         continue
-        #     plt.plot(real_anomaly[RAT], label=RAT, color=color_RAT[RAT])
+        plt.plot(prognoses_anomaly[epoch], label=epoch, color="tab:blue")
+        plt.axline((0, porog), (len(prognoses_anomaly[epoch]), porog), color="tab:red")
+        plt.legend(fontsize=10)
 
         plt.tight_layout()
-        win_size.on_changed(update)
         plt.show()
 
 

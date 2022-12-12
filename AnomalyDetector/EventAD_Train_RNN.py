@@ -1,21 +1,23 @@
+import keras.losses
+
 from AutoEncoder_RNN import *
 from pathlib import Path
 
 
 def main(versia, window_size, arhiteche):
     # Параметры датасета
-    batch_size          = 10
+    batch_size          = 1000
     validation_factor   = 0.05
     feature_range       = (-1, 1)
 
     # Параметры оптимизатора
     init_learning_rate  = 0.001
-    decay_steps         = 10000
-    decay_rate          = 0.25
+    decay_steps         = 50000
+    decay_rate          = 0.1
     staircase           = True
 
     # Параметры нейронной сети
-    epochs              = 5
+    epochs              = 3
     continue_education  = True
     checkpoint          = None
     checkpoint_epoch    = 0
@@ -26,7 +28,7 @@ def main(versia, window_size, arhiteche):
     path_model          = "modeles\\EventAnomalyDetector\\" + versia + "\\"
     model_name          = path_model + "model_EAD_v" + versia
     max_min_file        = path_model + "M&M_event.csv"
-    dataset             = "F:\\EVENT\\EventTest\\train_112_dataset_0.csv"
+    dataset             = "F:\\EVENT\\EventTest\\train_112_dataset_2m_1.csv"
     history_name        = path_model + "history_train_v" + versia + ".csv"
     history_valid_name  = path_model + "history_valid_v" + versia + ".csv"
 
@@ -61,7 +63,7 @@ def main(versia, window_size, arhiteche):
     print("Обучающий датасет создан.")
 
     autoencoder = Autoencoder(training_dataset.caracts_count, arhiteche, window_size)
-    autoencoder.build((1, window_size, training_dataset.caracts_count))
+    autoencoder.build((batch_size, window_size, training_dataset.caracts_count))
     autoencoder.summary()
     autoencoder.graph.summary()
 
@@ -72,12 +74,17 @@ def main(versia, window_size, arhiteche):
         staircase=staircase
     )
 
-    optimizer = keras.optimizers.Adam(learning_rate=0.0001)
+    optimizer = keras.optimizers.Adam(learning_rate=lr_schedule)
     autoencoder.compile(optimizer=optimizer, loss=loss_func)
     print("Автоэнкодер определён.")
 
+    checkpoint_name = "modeles\\EventAnomalyDetector\\" + versia + "\\Checkpoint\\epoch_1"
+    autoencoder.load_weights(checkpoint_name)
+    autoencoder.save(model_name+"batch_1000")
+    exit(-1)
+
     if continue_education:
-        checkpoint_name = "modeles\\EventAnomalyDetector\\" + versia + "\\Checkpoint\\" + checkpoint
+        checkpoint_name = "modeles\\EventAnomalyDetector\\" + versia + "\\Checkpoint\\epoch_1" + checkpoint
         autoencoder.load_weights(checkpoint_name)
         print(f"Продолжаем обучение с контрольной точки: {checkpoint}")
     else:
@@ -94,12 +101,12 @@ def main(versia, window_size, arhiteche):
 
 
 if __name__ == '__main__':
-    versia          = "0.4.2_LSTM"
-    window_size     = 100
-    arhiteche       = {"1_Input": (window_size, 112),
-                       "2_LSTM_seq": (56, 112), "3_LSTM": (28, 56),
-                       "4_RepeatVector": (window_size, None),
-                       "5_LSTM_seq": (56, 28), "6_LSTM_seq": (112, 56)}
+    versia = "0.4.7.1_LSTM"
+    window_size = 1
+    arhiteche = {"1_Input": (window_size, 112),
+                 "2_LSTM_seq": (56, 112), "3_LSTM_seq": (28, 56), "4_GRU": (14, 28),
+                 "5_RepeatVector": (window_size, None),
+                 "6_GRU_seq": (28, 14), "7_LSTM_seq": (56, 28), "8_LSTM": (112, 56)}
 
     print("\n\n" + versia)
     main(versia, window_size, arhiteche)

@@ -28,3 +28,6 @@
 /AnomalyDetector/History_train_traffic_1.csv
 /AnomalyDetector/MaM_traffic.csv
 /AnomalyDetector/modeles/
+/LogStdErr.txt
+/LogStdOut.txt
+/GrafPrint/resultsAnalyze.csv
