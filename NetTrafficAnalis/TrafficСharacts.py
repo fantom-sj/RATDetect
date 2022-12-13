@@ -3,66 +3,127 @@
     а также набор характеристик каждого пакета, необходимых для
     расчёта набора CHARACTERISTIC
 """
+import array
 from ipaddress import IPv4Address, ip_address, IPv6Address
-from collections import Counter
 from pathlib import Path
+from enum import Enum
+from array import array
 
+import pandas as pd
 import numpy as np
 import logging
 import dpkt
 
-EPOCH_AS_FILETIME = 116444736000000000  # January 1, 1970 as MS file time
-HUNDREDS_OF_NANOSECONDS = 10000000
+EPOCH_AS_FILETIME       = 116444736000000000  # January 1, 1970 as MS file time
+HUNDREDS_OF_NANOSECONDS = 10000000            # Количество наносекунд в одной секунде
+MIN_SECOND_INACTIVE     = 5                   # Количество секунд прежде чем поток станет считаться неактивным
 
-CHARACTERISTIC_FLOW = [
+
+class Flow_Charact(Enum):
     # Общие характеристики потока
-    "Time_Stamp_Start",         # 0. Временная метка начала потока
-    "Time_Stamp_End",           # 1. Временная метка конца потока
-    "Direction_IP_Port",        # 2. Уникальные направления пакетов в выборке (IP и порт назначения)
-    "Max_IP_dst_count",         # 3. Максимальное количество пакетов с одинаковым IP получателя
-    "Max_Port_src_count",       # 4. Максимальное количество пакетов с одинаковым портом источника
-    "Max_Port_dst_count",       # 5. Максимальное количество пакетов с одинаковым портом получателя
-    
-    "Count_TCP_pakets",         # 6. Количество пакетов переданных по TCP протоколу
-    "Count_UDP_pakets",         # 7. Количество пакетов переданных по UDP протоколу
-    "Count_src_is_dst_ports",   # 8. Количество пакетов с одинаковыми портами источника и назначения
-    
-    "Avg_size_TCP_paket",       # 9. Средний размер пакета переданного по протоколу TCP
-    "Avg_size_UDP_paket",       # 10. Средний размер пакета переданного по протоколу UDP
+    Time_Stamp_Start        = 0  # Временная метка начала потока +
+    Time_Stamp_End          = 1  # Временная метка конца потока +
+    Src_IP_Flow             = 2  # IP-адрес источника сетевого потока +
+    Dst_IP_Flow             = 3  # IP-адрес назначения сетевого потока +
+    Src_Port_Flow           = 4  # Порт источника сетевого потока +
+    Dst_Port_Flow           = 5  # Порт назначения сетевого потока +
+    Type_Protocol_Flow      = 6  # Тип протокола сетевого потока (0 - TCP, 1 - UDP) +
 
-    "Dev_size_TCP_paket",       # 11. Стандартное отклонение размера пакета переданного по протоколу TCP
-    "Dev_size_UDP_paket",       # 12. Стандартное отклонение размера пакета переданного по протоколу UDP
-    
-    "Avg_client_paket_size",    # 13. Средний размер пакета переданного клиентом
-    "Avg_server_paket_size",    # 14. Средний размер пакета переданного сервером
-    
-    "Dev_client_paket_size",    # 15. Стандартное отклонение размера пакета переданного клиентом
-    "Dev_server_paket_size",    # 16. Стандартное отклонение размера пакета переданного сервером
-    
-    "Size_client_bytes",        # 17. Количество байт переданных клиентом в заданном окне
-    "Size_server_bytes",        # 18. Количество байт переданных сервером в заданном окне
-    "Size_difference",          # 19. Разница размеров переданных данных клиентом и сервером
+    # Статистика по размерам и количеству покетов в потоке
+    Count_Packets_Flow      = 7  # Общее количество пакетов в потоке +
+    Count_Fwd_Packets       = 8  # Количество пакетов в направлении от клиента к серверу +
+    Count_Bwd_Packets       = 9  # Количество пакетов в направлении от сервера к клиенту +
 
-    "Count_syn_flag",           # 20. Количество пакетов с установленными syn флагами
-    "Count_ask_flag",           # 21. Количество пакетов с установленными ask флагами
-    "Count_syn_ask_flag"        # 22. Количество пакетов с установленными syn и ask флагами
-]
+    Len_Headers_Fwd         = 10  # Общий размер заголовков сетевых пакетов в потоке, в направлении от клиента +
+    Len_Fwd_Packets         = 11  # Общий размер пакетов в направлении от клиента к серверу +
+    Mean_Len_Fwd_Packets    = 12  # Средний размер пакета в направлении от клиента к серверу +
+    Min_Len_Fwd_Packets     = 13  # Минимальный размер пакета в направлении от клиента к серверу +
+    Max_Len_Fwd_Packets     = 14  # Максимальный размер пакета в направлении от клиента к серверу +
+    Std_Len_Fwd_Packets     = 15  # Стандартное отклонение размера пакета в направлении от клиента к серверу +
 
-BASE_CHARACTERISTIC = [
-    "timestamp",            # Временная метка пакета
-    "ip_src",               # IP адрес источника
-    "ip_dst",               # IP адрес получателя
-    "port_src",             # Порт источника
-    "port_dst",             # Порт получателя
-    "transp_protocol",      # Транспортный протокол (1 - TCP или 0 - UDP)
-    "size_paket",           # Размер пакета
-    "syn_flag",             # Наличие флага SYN
-    "ask_flag"              # Наличие флага ASK
-]
+    Len_Headers_Bwd         = 16  # Общий размер заголовков сетевых пакетов в потоке, в направлении от сервера +
+    Len_Bwd_Packets         = 17  # Общий размер пакетов в направлении от сервера к клиенту +
+    Mean_Len_Bwd_Packets    = 18  # Средний размер пакета в направлении от сервера к клиенту +
+    Min_Len_Bwd_Packets     = 19  # Минимальный размер пакета в направлении от сервера к клиенту +
+    Max_Len_Bwd_Packets     = 20  # Максимальный размер пакета в направлении от сервера к клиенту +
+    Std_Len_Bwd_Packets     = 21  # Стандартное отклонение размера пакета в направлении от сервера к клиенту +
+
+    Len_Packets             = 22  # Общий размер всех пакетов в потоке +
+    Mean_Len_Packets        = 23  # Средний размер пакета в потоке +
+    Min_Len_Packets         = 24  # Минимальный размер пакета в потоке +
+    Max_Len_Packets         = 25  # Максимальный размер пакета в потоке +
+    Std_Len_Packets         = 26  # Стандартное отклонение размера пакета в потоке +
+
+    # Временные характеристики потока
+    Duration_Flow           = 27  # Длительность потока (разница между Time_Stamp_End и Time_Stamp_Start) +
+
+    Mean_Time_Diff_Pkts     = 28  # Среднее время между пакетами в потоке +
+    Min_Time_Diff_Pkts      = 29  # Минимальное время между пакетами в потоке +
+    Max_Time_Diff_Pkts      = 30  # Максимальное время между пакетами в потоке +
+    Std_Time_Diff_Pkts      = 31  # Стандартное отклонение времени между пакетами в потоке +
+
+    Mean_Time_Diff_Fwd_Pkts = 32  # Среднее время между пакетами в направлении от клиента к серверу +
+    Min_Time_Diff_Fwd_Pkts  = 33  # Минимальное время между пакетами в направлении от клиента к серверу +
+    Max_Time_Diff_Fwd_Pkts  = 34  # Максимальное время между пакетами в направлении от клиента к серверу +
+    Std_Time_Diff_Fwd_Pkts  = 35  # Стандартное отклонение времени между пакетами в направлении от клиента к серверу +
+
+    Mean_Time_Diff_Bwd_Pkts = 36  # Среднее время между пакетами в направлении от сервера к клиенту +
+    Min_Time_Diff_Bwd_Pkts  = 37  # Минимальное время между пакетами в направлении от сервера к клиенту +
+    Max_Time_Diff_Bwd_Pkts  = 38  # Максимальное время между пакетами в направлении от сервера к клиенту +
+    Std_Time_Diff_Bwd_Pkts  = 39  # Стандартное отклонение времени между пакетами в направлении от сервера к клиенту +
+
+    # Наблюдаемые в сетевом потоке флаги
+    Count_Flags_PSH_Fwd     = 40  # Количество пакетов с флагом PSH от клиента к серверу +
+    Count_Flags_PSH_Bwd     = 41  # Количество пакетов с флагом PSH от сервера к клиенту +
+    Count_Flags_URG_Fwd     = 42  # Количество пакетов с флагом URG от клиента к серверу +
+    Count_Flags_URG_Bwd     = 43  # Количество пакетов с флагом URG от сервера к клиенту +
+    Count_Flags_PSH         = 44  # Общее количество пакетов с флагом PSH в сетевом потоке +
+    Count_Flags_URG         = 45  # Общее количество пакетов с флагом URG в сетевом потоке +
+    Count_Flags_SYN         = 46  # Общее количество пакетов с флагом SYN в сетевом потоке +
+    Count_Flags_ASK         = 47  # Общее количество пакетов с флагом ASK в сетевом потоке +
+    Count_Flags_RST         = 48  # Общее количество пакетов с флагом RST в сетевом потоке +
+    Count_Flags_FIN         = 49  # Общее количество пакетов с флагом FIN в сетевом потоке +
+
+    # Статистика на основе объема переданных данных
+    Ratio_Size_Down_UP      = 50  # Соотношение размера отправленных и полученных данных клиентом +
+    Speed_Bytes_Fwd         = 51  # Скорость передачи данных в байтах от клиента серверу +
+    Speed_Bytes_Bwd         = 52  # Скорость передачи данных в байтах от сервера клиенту +
+    Speed_Pkts_Fwd          = 53  # Скорость передачи пакетов от клиента серверу +
+    Speed_Pkts_Bwd          = 54  # Скорость передачи пакетов от сервера клиенту +
+    Speed_Bytes_Flow        = 55  # Скорость передачи байтов в сетевом потоке +
+    Speed_Pkts_Flow         = 56  # Скорость передачи пакетов в сетевом потоке +
+
+    # Активность сетевого потока
+    Mean_Active_Time_Flow   = 57  # Среднее время активности потока до того как стать неактивным +
+    Min_Active_Time_Flow    = 58  # Минимальное время активности потока до того как стать неактивным +
+    Max_Active_Time_Flow    = 59  # Максимальное время активности потока до того как стать неактивным +
+    Std_Active_Time_Flow    = 60  # Стандартное отклонение времени активности потока до того как стать неактивным +
+
+    Mean_InActive_Time_Flow = 61  # Среднее время не активности потока до того как стать активным +
+    Min_InActive_Time_Flow  = 62  # Минимальное время не активности потока до того как стать активным +
+    Max_InActive_Time_Flow  = 63  # Максимальное время не активности потока до того как стать активным +
+    Std_InActive_Time_Flow  = 64  # Стандартное отклонение времени активности потока до того как стать активным +
+
+
+class Packet_Charact(Enum):
+    timestamp           = 0
+    ip_src              = 1
+    ip_dst              = 2
+    port_src            = 3
+    port_dst            = 4
+    transp_protocol     = 5
+    size_packet         = 6
+    size_packet_data    = 7
+    size_packet_head    = 8
+    psh_flag            = 9
+    urg_flag            = 10
+    syn_flag            = 11
+    ask_flag            = 12
+    rst_flag            = 13
+    fin_flag            = 14
 
 
 def ParseTraffic(file_name):
-    # print(f"Парсинг файла с трафиком: {file_name}")
     pakets_characts = []
 
     if not Path(file_name).exists():
@@ -80,7 +141,7 @@ def ParseTraffic(file_name):
 
     # Считывание каждого пакета для дальнейшей распаковки в набор характеристик
     for timestamp, raw in pcap_file_read:
-        characts = {"timestamp": timestamp}
+        characts = {Packet_Charact.timestamp: round(timestamp * HUNDREDS_OF_NANOSECONDS + EPOCH_AS_FILETIME)}
 
         eth = dpkt.ethernet.Ethernet(raw)
         ip = eth.data
@@ -98,49 +159,74 @@ def ParseTraffic(file_name):
             continue
 
         if isinstance(seg, dpkt.tcp.TCP):
-            characts["transp_protocol"] = 1  # Значение 1 это TCP
+            characts[Packet_Charact.transp_protocol] = 1  # Значение 1 это TCP
+
+            if seg.flags & dpkt.tcp.TH_PUSH:
+                characts[Packet_Charact.psh_flag] = 1
+            else:
+                characts[Packet_Charact.psh_flag] = 0
+
+            if seg.flags & dpkt.tcp.TH_URG:
+                characts[Packet_Charact.urg_flag] = 1
+            else:
+                characts[Packet_Charact.urg_flag] = 0
 
             if seg.flags & dpkt.tcp.TH_SYN:
-                characts["syn_flag"] = 1
+                characts[Packet_Charact.syn_flag] = 1
             else:
-                characts["syn_flag"] = 0
+                characts[Packet_Charact.syn_flag] = 0
 
             if seg.flags & dpkt.tcp.TH_ACK:
-                characts["ask_flag"] = 1
+                characts[Packet_Charact.ask_flag] = 1
             else:
-                characts["ask_flag"] = 0
+                characts[Packet_Charact.ask_flag] = 0
+
+            if seg.flags & dpkt.tcp.TH_RST:
+                characts[Packet_Charact.rst_flag] = 1
+            else:
+                characts[Packet_Charact.rst_flag] = 0
+
+            if seg.flags & dpkt.tcp.TH_FIN:
+                characts[Packet_Charact.fin_flag] = 1
+            else:
+                characts[Packet_Charact.fin_flag] = 0
 
         elif isinstance(seg, dpkt.udp.UDP):
-            characts["transp_protocol"] = 0  # Значение 0 это TCP
-            characts["syn_flag"] = 0
-            characts["ask_flag"] = 0
+            characts[Packet_Charact.transp_protocol] = 0  # Значение 0 это TCP
+            characts[Packet_Charact.psh_flag] = 0
+            characts[Packet_Charact.urg_flag] = 0
+            characts[Packet_Charact.syn_flag] = 0
+            characts[Packet_Charact.ask_flag] = 0
+            characts[Packet_Charact.rst_flag] = 0
+            characts[Packet_Charact.fin_flag] = 0
         else:
             continue
 
-        characts["ip_src"] = ip.src
-        characts["ip_dst"] = ip.dst
-        characts["port_src"] = seg.sport
-        characts["port_dst"] = seg.dport
-        characts["size_paket"] = len(seg)
+        characts[Packet_Charact.ip_src] = int.from_bytes(ip.src, byteorder="big")
+        characts[Packet_Charact.ip_dst] = int.from_bytes(ip.dst, byteorder="big")
+        characts[Packet_Charact.port_src] = seg.sport
+        characts[Packet_Charact.port_dst] = seg.dport
+        characts[Packet_Charact.size_packet] = len(raw)
+        characts[Packet_Charact.size_packet_data] = len(seg.data)
+        characts[Packet_Charact.size_packet_head] = characts[Packet_Charact.size_packet] - \
+                                                    characts[Packet_Charact.size_packet_data]
 
         pakets_characts.append(characts)
 
     pcap_file.close()
-    # print("Обработано пакетов: %d" % len(pakets_characts))
 
     for pkt in pakets_characts:
         yield pkt
 
 
-def CulcCharactsOnWindow(array_paket, window_size, ip_client):
+def CulcCharactsFlowOnWindow(array_paket_flow: list, ip_client: list):
     """
         Функция предназначена для расчёта метрик при анализе очередного сетевого
         пакета, считанного из pcapng файла функцией-генератором ParsePcapng.
         Расчёт метрик ведётся в рамках заданного окна.
 
         Принимает:
-            array_paket - массив с характеристиками сетевых пакетов длиной в одно окно;
-            window_size - размер заданного окна;
+            array_paket_flow - массив с характеристиками сетевых пакетов в анализируемом потоке;
             ip_client   - массив с ip адресами клиента, по котором будет определиться
                           кто выступает клиентом в каждом сетевом пакете;
         Возвращает:
@@ -148,175 +234,202 @@ def CulcCharactsOnWindow(array_paket, window_size, ip_client):
                                  описывающую состояние заданного окна в рамках которого идут расчёты.
     """
 
-    arr_ip_src          = []
-    arr_ip_dst          = []
-    arr_port_src        = []
-    arr_port_dst        = []
-    arr_transp_protocol = []
-    arr_size_paket      = []
-    arr_syn_flag        = []
-    arr_ask_flag        = []
-    arr_syn_ask_flag    = []
+    characts_flow = {
+        Flow_Charact.Time_Stamp_Start:   array_paket_flow[0][Packet_Charact.timestamp],
+        Flow_Charact.Time_Stamp_End:     array_paket_flow[-1][Packet_Charact.timestamp],
+        Flow_Charact.Src_IP_Flow:        array_paket_flow[0][Packet_Charact.ip_src],
+        Flow_Charact.Dst_IP_Flow:        array_paket_flow[0][Packet_Charact.ip_dst],
+        Flow_Charact.Src_Port_Flow:      array_paket_flow[0][Packet_Charact.port_src],
+        Flow_Charact.Dst_Port_Flow:      array_paket_flow[0][Packet_Charact.port_dst],
+        Flow_Charact.Type_Protocol_Flow: array_paket_flow[0][Packet_Charact.transp_protocol],
 
-    Direction_IP_Port   = None
+        Flow_Charact.Count_Packets_Flow: len(array_paket_flow),
+        Flow_Charact.Count_Fwd_Packets:  0,
+        Flow_Charact.Count_Bwd_Packets:  0,
+        Flow_Charact.Len_Headers_Fwd:    0,
+        Flow_Charact.Len_Fwd_Packets:    0,
+        Flow_Charact.Len_Headers_Bwd:    0,
+        Flow_Charact.Len_Bwd_Packets:    0,
+        Flow_Charact.Len_Packets:        0,
 
-    for pkt in array_paket:
-        if not IPv4Address(pkt["ip_dst"]) in ip_client:
-            direction = str(IPv4Address(pkt["ip_dst"])) + ":" + str(pkt["port_dst"])
-            if Direction_IP_Port is None:
-                Direction_IP_Port = direction
-            elif not direction in Direction_IP_Port:
-                Direction_IP_Port += (";" + direction)
+        Flow_Charact.Duration_Flow: array_paket_flow[-1][Packet_Charact.timestamp] -
+                                    array_paket_flow[0][Packet_Charact.timestamp],
 
-        arr_ip_src.append(IPv4Address(pkt["ip_src"]))
-        arr_ip_dst.append(IPv4Address(pkt["ip_dst"]))
-        arr_port_src.append(pkt["port_src"])
-        arr_port_dst.append(pkt["port_dst"])
-        arr_transp_protocol.append(pkt["transp_protocol"])
-        arr_size_paket.append(pkt["size_paket"])
-
-        if pkt["syn_flag"] == 0 and pkt["ask_flag"] == 1:
-            arr_ask_flag.append(1)
-        elif pkt["syn_flag"] == 1 and pkt["ask_flag"] == 0:
-            arr_syn_flag.append(1)
-        elif pkt["syn_flag"] == 1 and pkt["ask_flag"] == 1:
-            arr_syn_ask_flag.append(1)
-
-    # Устанавливаем временную метку пакета, с приходом которого были рассчитаны характеристики
-    Time_Stamp_Start = round(array_paket[0]["timestamp"] * HUNDREDS_OF_NANOSECONDS + EPOCH_AS_FILETIME)
-    Time_Stamp_End   = round(array_paket[-1]["timestamp"] * HUNDREDS_OF_NANOSECONDS + EPOCH_AS_FILETIME)
-
-    # Посчитываем максимальное количество пакетов с одинаковым IP получателя:
-    count_ip_dst = Counter(arr_ip_dst)
-    Max_IP_dst_count = max(count_ip_dst.items(), key=lambda c_ip: c_ip[1])[1]
-
-    # Посчитываем максимальное количество пакетов с одинаковым портом источника
-    count_port_src = Counter(arr_port_src)
-    Max_Port_src_count = max(count_port_src.items(), key=lambda c_port: c_port[1])[1]
-
-    # Посчитываем максимальное количество пакетов с одинаковым портом получателя
-    try:
-        count_port_dst = Counter(arr_port_dst)
-        Max_Port_dst_count = max(count_port_dst.items(), key=lambda c_port: c_port[1])[1]
-    except Exception as err:
-        Max_Port_dst_count = 0
-        # logging.exception(f"Не удалось рассчитать количество пакетов с одинаковым портом получателя!\n{err}")
-        # return None
-
-    # Посчитываем количество пакетов переданных по TCP и UDP протоколу
-    Count_TCP_pakets = sum(arr_transp_protocol)
-    Count_UDP_pakets = window_size - Count_TCP_pakets
-
-    # Посчитываем количество пакетов с одинаковыми портами источника и назначения
-    try:
-        Count_src_is_dst_ports = len([i for i in zip(arr_port_src, arr_port_dst) if i[0] == i[1]])
-    except Exception as err:
-        # logging.exception(f"Не удалось рассчитать Count_src_is_dst_ports!\n{err}")
-        Count_src_is_dst_ports = 0
-
-    # Посчитываем средний размер и стандартное отклонение среднего размера пакета переданного по протоколу TCP и UDP
-    arr_size_paket_TCP = []
-    arr_size_paket_UDP = []
-    for i in range(window_size):
-        if arr_transp_protocol[i]:
-            arr_size_paket_TCP.append(arr_size_paket[i])
-        else:
-            arr_size_paket_UDP.append(arr_size_paket[i])
-
-    try:
-        if len(arr_size_paket_TCP) == 0:
-            raise ValueError("Размер arr_size_paket_TCP = 0")
-        Avg_size_TCP_paket = np.mean(arr_size_paket_TCP)
-        Dev_size_TCP_paket = np.std(arr_size_paket_TCP)
-    except Exception as err:
-        Avg_size_TCP_paket = 0
-        Dev_size_TCP_paket = 0
-        # logging.exception(f"Не удалось рассчитать Avg_size_TCP_paket и Dev_size_TCP_paket!\n{err}")
-        # return None
-
-    try:
-        if len(arr_size_paket_UDP) == 0:
-            raise ValueError("Размер arr_size_paket_UDP = 0")
-        Avg_size_UDP_paket = np.mean(arr_size_paket_UDP)
-        Dev_size_UDP_paket = np.std(arr_size_paket_UDP)
-    except Exception as err:
-        Avg_size_UDP_paket = 0
-        Dev_size_UDP_paket = 0
-        # logging.exception(f"Не удалось рассчитать Avg_size_UDP_paket и Dev_size_UDP_paket!\n{err}")
-        # return None
-
-    # Посчитываем средний размер пакета переданного клиентом и сервером, а также стандартное отклонение
-    arr_client_paket_size = []
-    arr_server_paket_size = []
-    for i in range(window_size):
-        if arr_ip_src[i] in ip_client:
-            arr_client_paket_size.append(arr_size_paket[i])
-        if arr_ip_dst[i] in ip_client:
-            arr_server_paket_size.append(arr_size_paket[i])
-
-    try:
-        if len(arr_client_paket_size) == 0:
-            raise ValueError("Размер arr_client_paket_size = 0")
-        Avg_client_paket_size = np.mean(arr_client_paket_size)
-        Dev_client_paket_size = np.std(arr_client_paket_size)
-    except Exception as err:
-        Avg_client_paket_size = 0
-        Dev_client_paket_size = 0
-        # logging.exception(f"Не удалось рассчитать Avg_client_paket_size и Dev_client_paket_size!\n{err}")
-        # return None
-
-    try:
-        if len(arr_server_paket_size) == 0:
-            raise ValueError("Размер arr_server_paket_size = 0")
-        Avg_server_paket_size = np.mean(arr_server_paket_size)
-        Dev_server_paket_size = np.std(arr_server_paket_size)
-    except Exception as err:
-        Avg_server_paket_size = 0
-        Dev_server_paket_size = 0
-        # logging.exception(f"Не удалось рассчитать Avg_server_paket_size и Dev_server_paket_size!\n{err}")
-        # return None
-
-    # Посчитываем количество байт переданных клиентом и сервером в заданном окне, а также их разницу
-    Size_client_bytes = sum(arr_client_paket_size)
-    Size_server_bytes = sum(arr_server_paket_size)
-    Size_difference = abs(Size_client_bytes - Size_server_bytes)
-
-    # Посчитываем количество пакетов с разными комбинациями syn и ask флагов
-    Count_syn_flag      = sum(arr_syn_flag)
-    Count_ask_flag      = sum(arr_ask_flag)
-    Count_syn_ask_flag  = sum(arr_syn_ask_flag)
-
-    characts_on_window = {
-        "Time_Stamp_Start": Time_Stamp_Start,
-        "Time_Stamp_End": Time_Stamp_End,
-        "Direction_IP_Port": Direction_IP_Port,
-        "Max_IP_dst_count": Max_IP_dst_count,
-        "Max_Port_src_count": Max_Port_src_count,
-        "Max_Port_dst_count": Max_Port_dst_count,
-
-        "Count_TCP_pakets": Count_TCP_pakets,
-        "Count_UDP_pakets": Count_UDP_pakets,
-        "Count_src_is_dst_ports": Count_src_is_dst_ports,
-
-        "Avg_size_TCP_paket": Avg_size_TCP_paket,
-        "Avg_size_UDP_paket": Avg_size_UDP_paket,
-
-        "Dev_size_TCP_paket": Dev_size_TCP_paket,
-        "Dev_size_UDP_paket": Dev_size_UDP_paket,
-
-        "Avg_client_paket_size": Avg_client_paket_size,
-        "Avg_server_paket_size": Avg_server_paket_size,
-
-        "Dev_client_paket_size": Dev_client_paket_size,
-        "Dev_server_paket_size": Dev_server_paket_size,
-
-        "Size_client_bytes": Size_client_bytes,
-        "Size_server_bytes": Size_server_bytes,
-        "Size_difference": Size_difference,
-
-        "Count_syn_flag": Count_syn_flag,
-        "Count_ask_flag": Count_ask_flag,
-        "Count_syn_ask_flag": Count_syn_ask_flag,
+        Flow_Charact.Count_Flags_PSH_Fwd: 0,
+        Flow_Charact.Count_Flags_PSH_Bwd: 0,
+        Flow_Charact.Count_Flags_URG_Fwd: 0,
+        Flow_Charact.Count_Flags_URG_Bwd: 0,
+        Flow_Charact.Count_Flags_PSH:     0,
+        Flow_Charact.Count_Flags_URG:     0,
+        Flow_Charact.Count_Flags_SYN:     0,
+        Flow_Charact.Count_Flags_ASK:     0,
+        Flow_Charact.Count_Flags_RST:     0,
+        Flow_Charact.Count_Flags_FIN:     0,
     }
 
-    return characts_on_window
+    arr_len_fwd_packets = array("I")
+    arr_len_bwd_packets = array("I")
+    arr_len_packets     = array("I")
+
+    arr_time_diff_pkts     = array("Q")
+    arr_time_diff_fwd_pkts = array("Q")
+    arr_time_diff_bwd_pkts = array("Q")
+    arr_time_active_flow   = array("Q")
+    arr_time_inactive_flow = array("Q")
+
+    pkt_old     = None
+    pkt_fwd_old = None
+    pkt_bwd_old = None
+
+    start_active = array_paket_flow[0][Packet_Charact.timestamp]
+
+    for pkt in array_paket_flow:
+        if pkt[Packet_Charact.ip_src] in ip_client:
+            characts_flow[Flow_Charact.Count_Fwd_Packets] += 1
+
+            characts_flow[Flow_Charact.Len_Headers_Fwd] += pkt[Packet_Charact.size_packet_head]
+            characts_flow[Flow_Charact.Len_Fwd_Packets] += pkt[Packet_Charact.size_packet]
+
+            arr_len_fwd_packets.append(pkt[Packet_Charact.size_packet])
+
+            if not pkt_fwd_old is None:
+                arr_time_diff_fwd_pkts.append(pkt[Packet_Charact.timestamp] - pkt_fwd_old[Packet_Charact.timestamp])
+            pkt_fwd_old = pkt
+
+            if pkt[Packet_Charact.psh_flag]:
+                characts_flow[Flow_Charact.Count_Flags_PSH_Fwd] += 1
+            if pkt[Packet_Charact.urg_flag]:
+                characts_flow[Flow_Charact.Count_Flags_URG_Fwd] += 1
+        else:
+            characts_flow[Flow_Charact.Count_Bwd_Packets] += 1
+
+            characts_flow[Flow_Charact.Len_Headers_Bwd] += pkt[Packet_Charact.size_packet_head]
+            characts_flow[Flow_Charact.Len_Bwd_Packets] += pkt[Packet_Charact.size_packet]
+
+            arr_len_bwd_packets.append(pkt[Packet_Charact.size_packet])
+
+            if not pkt_bwd_old is None:
+                arr_time_diff_bwd_pkts.append(pkt[Packet_Charact.timestamp] - pkt_bwd_old[Packet_Charact.timestamp])
+            pkt_bwd_old = pkt
+
+            if pkt[Packet_Charact.psh_flag]:
+                characts_flow[Flow_Charact.Count_Flags_PSH_Bwd] += 1
+            if pkt[Packet_Charact.urg_flag]:
+                characts_flow[Flow_Charact.Count_Flags_URG_Bwd] += 1
+
+        characts_flow[Flow_Charact.Len_Packets] += pkt[Packet_Charact.size_packet]
+        arr_len_packets.append(pkt[Packet_Charact.size_packet])
+
+        if not pkt_old is None:
+            arr_time_diff_pkts.append(pkt[Packet_Charact.timestamp] - pkt_old[Packet_Charact.timestamp])
+
+            timeout_inactive = pkt[Packet_Charact.timestamp] - pkt_old[Packet_Charact.timestamp]
+            if timeout_inactive >= (HUNDREDS_OF_NANOSECONDS * MIN_SECOND_INACTIVE):
+                arr_time_inactive_flow.append(timeout_inactive)
+                arr_time_active_flow.append(pkt_old[Packet_Charact.timestamp] - start_active)
+                start_active = pkt[Packet_Charact.timestamp]
+
+        pkt_old = pkt
+
+        if pkt[Packet_Charact.psh_flag]:
+            characts_flow[Flow_Charact.Count_Flags_PSH] += 1
+        if pkt[Packet_Charact.urg_flag]:
+            characts_flow[Flow_Charact.Count_Flags_URG] += 1
+        if pkt[Packet_Charact.syn_flag]:
+            characts_flow[Flow_Charact.Count_Flags_SYN] += 1
+        if pkt[Packet_Charact.ask_flag]:
+            characts_flow[Flow_Charact.Count_Flags_ASK] += 1
+        if pkt[Packet_Charact.rst_flag]:
+            characts_flow[Flow_Charact.Count_Flags_RST] += 1
+        if pkt[Packet_Charact.fin_flag]:
+            characts_flow[Flow_Charact.Count_Flags_FIN] += 1
+
+    characts_flow[Flow_Charact.Mean_Len_Fwd_Packets] = np.mean(arr_len_fwd_packets)
+    characts_flow[Flow_Charact.Min_Len_Fwd_Packets]  = np.min(arr_len_fwd_packets)
+    characts_flow[Flow_Charact.Max_Len_Fwd_Packets]  = np.max(arr_len_fwd_packets)
+    characts_flow[Flow_Charact.Std_Len_Fwd_Packets]  = np.std(arr_len_fwd_packets)
+
+    characts_flow[Flow_Charact.Mean_Len_Bwd_Packets] = np.mean(arr_len_bwd_packets)
+    characts_flow[Flow_Charact.Min_Len_Bwd_Packets]  = np.min(arr_len_bwd_packets)
+    characts_flow[Flow_Charact.Max_Len_Bwd_Packets]  = np.max(arr_len_bwd_packets)
+    characts_flow[Flow_Charact.Std_Len_Bwd_Packets]  = np.std(arr_len_bwd_packets)
+
+    characts_flow[Flow_Charact.Mean_Len_Packets]     = np.mean(arr_len_packets)
+    characts_flow[Flow_Charact.Min_Len_Packets]      = np.min(arr_len_packets)
+    characts_flow[Flow_Charact.Max_Len_Packets]      = np.max(arr_len_packets)
+    characts_flow[Flow_Charact.Std_Len_Packets]      = np.std(arr_len_packets)
+
+    characts_flow[Flow_Charact.Mean_Time_Diff_Pkts] = np.mean(arr_time_diff_pkts)
+    characts_flow[Flow_Charact.Min_Time_Diff_Pkts]  = np.min(arr_time_diff_pkts)
+    characts_flow[Flow_Charact.Max_Time_Diff_Pkts]  = np.max(arr_time_diff_pkts)
+    characts_flow[Flow_Charact.Std_Time_Diff_Pkts]  = np.std(arr_time_diff_pkts)
+
+    characts_flow[Flow_Charact.Mean_Time_Diff_Fwd_Pkts] = np.mean(arr_time_diff_fwd_pkts)
+    characts_flow[Flow_Charact.Min_Time_Diff_Fwd_Pkts]  = np.min(arr_time_diff_fwd_pkts)
+    characts_flow[Flow_Charact.Max_Time_Diff_Fwd_Pkts]  = np.max(arr_time_diff_fwd_pkts)
+    characts_flow[Flow_Charact.Std_Time_Diff_Fwd_Pkts]  = np.std(arr_time_diff_fwd_pkts)
+
+    characts_flow[Flow_Charact.Mean_Time_Diff_Bwd_Pkts] = np.mean(arr_time_diff_bwd_pkts)
+    characts_flow[Flow_Charact.Min_Time_Diff_Bwd_Pkts]  = np.min(arr_time_diff_bwd_pkts)
+    characts_flow[Flow_Charact.Max_Time_Diff_Bwd_Pkts]  = np.max(arr_time_diff_bwd_pkts)
+    characts_flow[Flow_Charact.Std_Time_Diff_Bwd_Pkts]  = np.std(arr_time_diff_bwd_pkts)
+
+    if characts_flow[Flow_Charact.Len_Bwd_Packets] != 0:
+        characts_flow[Flow_Charact.Ratio_Size_Down_UP] = characts_flow[Flow_Charact.Len_Fwd_Packets] / \
+                                                         characts_flow[Flow_Charact.Len_Bwd_Packets]
+    else:
+        characts_flow[Flow_Charact.Ratio_Size_Down_UP] = np.inf
+
+    characts_flow[Flow_Charact.Speed_Bytes_Fwd]  = characts_flow[Flow_Charact.Len_Fwd_Packets] / \
+                                                   characts_flow[Flow_Charact.Duration_Flow]
+    characts_flow[Flow_Charact.Speed_Bytes_Bwd]  = characts_flow[Flow_Charact.Len_Bwd_Packets] / \
+                                                   characts_flow[Flow_Charact.Duration_Flow]
+    characts_flow[Flow_Charact.Speed_Pkts_Fwd]   = characts_flow[Flow_Charact.Count_Fwd_Packets] / \
+                                                   characts_flow[Flow_Charact.Duration_Flow]
+    characts_flow[Flow_Charact.Speed_Pkts_Bwd]   = characts_flow[Flow_Charact.Count_Bwd_Packets] / \
+                                                   characts_flow[Flow_Charact.Duration_Flow]
+    characts_flow[Flow_Charact.Speed_Bytes_Flow] = characts_flow[Flow_Charact.Len_Packets] / \
+                                                   characts_flow[Flow_Charact.Duration_Flow]
+    characts_flow[Flow_Charact.Speed_Pkts_Flow]  = characts_flow[Flow_Charact.Count_Packets_Flow] / \
+                                                   characts_flow[Flow_Charact.Duration_Flow]
+
+    characts_flow[Flow_Charact.Mean_Active_Time_Flow] = np.mean(arr_time_active_flow)
+    characts_flow[Flow_Charact.Min_Active_Time_Flow]  = np.min(arr_time_active_flow)
+    characts_flow[Flow_Charact.Max_Active_Time_Flow]  = np.max(arr_time_active_flow)
+    characts_flow[Flow_Charact.Std_Active_Time_Flow]  = np.std(arr_time_active_flow)
+
+    characts_flow[Flow_Charact.Mean_InActive_Time_Flow] = np.mean(arr_time_inactive_flow)
+    characts_flow[Flow_Charact.Min_InActive_Time_Flow]  = np.min(arr_time_inactive_flow)
+    characts_flow[Flow_Charact.Max_InActive_Time_Flow]  = np.max(arr_time_inactive_flow)
+    characts_flow[Flow_Charact.Std_InActive_Time_Flow]  = np.std(arr_time_inactive_flow)
+
+    return characts_flow
+
+
+from timeit import timeit
+
+if __name__ == '__main__':
+    traffic_file = "D:\\Пользователи\\Admin\\Рабочий стол\\Статья по КБ\\RATDetect\\data\\pcap\\traffic_RAT_NingaliNET\\traffic_RAT_NingaliNET_1_filter.pcapng"
+    ip_client = [int.from_bytes(IPv4Address("192.168.10.128").packed, byteorder="big")]
+    arr_pkts = []
+
+    for i in range(1):
+        for pkt in ParseTraffic(traffic_file):
+            arr_pkts.append(pkt)
+
+    arr_pkts = pd.DataFrame(arr_pkts)
+    arr_pkts = arr_pkts.sort_values(Packet_Charact.timestamp)
+    arr_pkts = arr_pkts.to_dict("records")
+    print(len(arr_pkts))
+
+    timeBool = timeit("""
+CulcCharactsFlowOnWindow(arr_pkts, ip_client)
+    """, globals=locals(), number=1)
+    print(timeBool)
+
+    characts_flow = CulcCharactsFlowOnWindow(arr_pkts, ip_client)
+    print(characts_flow)
+    characts_flow = pd.DataFrame([characts_flow])
+    print(characts_flow)
+
+
