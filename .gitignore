@@ -31,3 +31,5 @@
 /LogStdErr.txt
 /LogStdOut.txt
 /GrafPrint/resultsAnalyze.csv
+/NetTrafficAnalis/print.txt
+/NetTrafficAnalis/print.py

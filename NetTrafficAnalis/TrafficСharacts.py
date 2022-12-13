@@ -284,6 +284,18 @@ def CulcCharactsFlowOnWindow(array_paket_flow: list, ip_client: list):
     start_active = array_paket_flow[0][Packet_Charact.timestamp]
 
     for pkt in array_paket_flow:
+        if not pkt_old is None:
+            try:
+                arr_time_diff_pkts.append(pkt[Packet_Charact.timestamp] - pkt_old[Packet_Charact.timestamp])
+            except:
+                continue
+
+            timeout_inactive = pkt[Packet_Charact.timestamp] - pkt_old[Packet_Charact.timestamp]
+            if timeout_inactive >= (HUNDREDS_OF_NANOSECONDS * MIN_SECOND_INACTIVE):
+                arr_time_inactive_flow.append(timeout_inactive)
+                arr_time_active_flow.append(pkt_old[Packet_Charact.timestamp] - start_active)
+                start_active = pkt[Packet_Charact.timestamp]
+
         if pkt[Packet_Charact.ip_src] in ip_client:
             characts_flow[Flow_Charact.Count_Fwd_Packets] += 1
 
@@ -320,15 +332,6 @@ def CulcCharactsFlowOnWindow(array_paket_flow: list, ip_client: list):
         characts_flow[Flow_Charact.Len_Packets] += pkt[Packet_Charact.size_packet]
         arr_len_packets.append(pkt[Packet_Charact.size_packet])
 
-        if not pkt_old is None:
-            arr_time_diff_pkts.append(pkt[Packet_Charact.timestamp] - pkt_old[Packet_Charact.timestamp])
-
-            timeout_inactive = pkt[Packet_Charact.timestamp] - pkt_old[Packet_Charact.timestamp]
-            if timeout_inactive >= (HUNDREDS_OF_NANOSECONDS * MIN_SECOND_INACTIVE):
-                arr_time_inactive_flow.append(timeout_inactive)
-                arr_time_active_flow.append(pkt_old[Packet_Charact.timestamp] - start_active)
-                start_active = pkt[Packet_Charact.timestamp]
-
         pkt_old = pkt
 
         if pkt[Packet_Charact.psh_flag]:
@@ -344,35 +347,71 @@ def CulcCharactsFlowOnWindow(array_paket_flow: list, ip_client: list):
         if pkt[Packet_Charact.fin_flag]:
             characts_flow[Flow_Charact.Count_Flags_FIN] += 1
 
-    characts_flow[Flow_Charact.Mean_Len_Fwd_Packets] = np.mean(arr_len_fwd_packets)
-    characts_flow[Flow_Charact.Min_Len_Fwd_Packets]  = np.min(arr_len_fwd_packets)
-    characts_flow[Flow_Charact.Max_Len_Fwd_Packets]  = np.max(arr_len_fwd_packets)
-    characts_flow[Flow_Charact.Std_Len_Fwd_Packets]  = np.std(arr_len_fwd_packets)
+    if len(arr_len_fwd_packets) == 0:
+        characts_flow[Flow_Charact.Mean_Len_Fwd_Packets] = 0
+        characts_flow[Flow_Charact.Min_Len_Fwd_Packets]  = 0
+        characts_flow[Flow_Charact.Max_Len_Fwd_Packets]  = 0
+        characts_flow[Flow_Charact.Std_Len_Fwd_Packets]  = 0
+    else:
+        characts_flow[Flow_Charact.Mean_Len_Fwd_Packets] = np.mean(arr_len_fwd_packets)
+        characts_flow[Flow_Charact.Min_Len_Fwd_Packets]  = np.min(arr_len_fwd_packets)
+        characts_flow[Flow_Charact.Max_Len_Fwd_Packets]  = np.max(arr_len_fwd_packets)
+        characts_flow[Flow_Charact.Std_Len_Fwd_Packets]  = np.std(arr_len_fwd_packets)
 
-    characts_flow[Flow_Charact.Mean_Len_Bwd_Packets] = np.mean(arr_len_bwd_packets)
-    characts_flow[Flow_Charact.Min_Len_Bwd_Packets]  = np.min(arr_len_bwd_packets)
-    characts_flow[Flow_Charact.Max_Len_Bwd_Packets]  = np.max(arr_len_bwd_packets)
-    characts_flow[Flow_Charact.Std_Len_Bwd_Packets]  = np.std(arr_len_bwd_packets)
+    if len(arr_len_bwd_packets) == 0:
+        characts_flow[Flow_Charact.Mean_Len_Bwd_Packets] = 0
+        characts_flow[Flow_Charact.Min_Len_Bwd_Packets]  = 0
+        characts_flow[Flow_Charact.Max_Len_Bwd_Packets]  = 0
+        characts_flow[Flow_Charact.Std_Len_Bwd_Packets]  = 0
+    else:
+        characts_flow[Flow_Charact.Mean_Len_Bwd_Packets] = np.mean(arr_len_bwd_packets)
+        characts_flow[Flow_Charact.Min_Len_Bwd_Packets]  = np.min(arr_len_bwd_packets)
+        characts_flow[Flow_Charact.Max_Len_Bwd_Packets]  = np.max(arr_len_bwd_packets)
+        characts_flow[Flow_Charact.Std_Len_Bwd_Packets]  = np.std(arr_len_bwd_packets)
 
-    characts_flow[Flow_Charact.Mean_Len_Packets]     = np.mean(arr_len_packets)
-    characts_flow[Flow_Charact.Min_Len_Packets]      = np.min(arr_len_packets)
-    characts_flow[Flow_Charact.Max_Len_Packets]      = np.max(arr_len_packets)
-    characts_flow[Flow_Charact.Std_Len_Packets]      = np.std(arr_len_packets)
+    if len(arr_len_packets) == 0:
+        characts_flow[Flow_Charact.Mean_Len_Packets] = 0
+        characts_flow[Flow_Charact.Min_Len_Packets]  = 0
+        characts_flow[Flow_Charact.Max_Len_Packets]  = 0
+        characts_flow[Flow_Charact.Std_Len_Packets]  = 0
+    else:
+        characts_flow[Flow_Charact.Mean_Len_Packets] = np.mean(arr_len_packets)
+        characts_flow[Flow_Charact.Min_Len_Packets]  = np.min(arr_len_packets)
+        characts_flow[Flow_Charact.Max_Len_Packets]  = np.max(arr_len_packets)
+        characts_flow[Flow_Charact.Std_Len_Packets]  = np.std(arr_len_packets)
 
-    characts_flow[Flow_Charact.Mean_Time_Diff_Pkts] = np.mean(arr_time_diff_pkts)
-    characts_flow[Flow_Charact.Min_Time_Diff_Pkts]  = np.min(arr_time_diff_pkts)
-    characts_flow[Flow_Charact.Max_Time_Diff_Pkts]  = np.max(arr_time_diff_pkts)
-    characts_flow[Flow_Charact.Std_Time_Diff_Pkts]  = np.std(arr_time_diff_pkts)
+    if len(arr_time_diff_pkts) == 0:
+        characts_flow[Flow_Charact.Mean_Time_Diff_Pkts] = 0
+        characts_flow[Flow_Charact.Min_Time_Diff_Pkts]  = 0
+        characts_flow[Flow_Charact.Max_Time_Diff_Pkts]  = 0
+        characts_flow[Flow_Charact.Std_Time_Diff_Pkts]  = 0
+    else:
+        characts_flow[Flow_Charact.Mean_Time_Diff_Pkts] = np.mean(arr_time_diff_pkts)
+        characts_flow[Flow_Charact.Min_Time_Diff_Pkts]  = np.min(arr_time_diff_pkts)
+        characts_flow[Flow_Charact.Max_Time_Diff_Pkts]  = np.max(arr_time_diff_pkts)
+        characts_flow[Flow_Charact.Std_Time_Diff_Pkts]  = np.std(arr_time_diff_pkts)
 
-    characts_flow[Flow_Charact.Mean_Time_Diff_Fwd_Pkts] = np.mean(arr_time_diff_fwd_pkts)
-    characts_flow[Flow_Charact.Min_Time_Diff_Fwd_Pkts]  = np.min(arr_time_diff_fwd_pkts)
-    characts_flow[Flow_Charact.Max_Time_Diff_Fwd_Pkts]  = np.max(arr_time_diff_fwd_pkts)
-    characts_flow[Flow_Charact.Std_Time_Diff_Fwd_Pkts]  = np.std(arr_time_diff_fwd_pkts)
+    if len(arr_time_diff_fwd_pkts) == 0:
+        characts_flow[Flow_Charact.Mean_Time_Diff_Fwd_Pkts] = 0
+        characts_flow[Flow_Charact.Min_Time_Diff_Fwd_Pkts]  = 0
+        characts_flow[Flow_Charact.Max_Time_Diff_Fwd_Pkts]  = 0
+        characts_flow[Flow_Charact.Std_Time_Diff_Fwd_Pkts]  = 0
+    else:
+        characts_flow[Flow_Charact.Mean_Time_Diff_Fwd_Pkts] = np.mean(arr_time_diff_fwd_pkts)
+        characts_flow[Flow_Charact.Min_Time_Diff_Fwd_Pkts]  = np.min(arr_time_diff_fwd_pkts)
+        characts_flow[Flow_Charact.Max_Time_Diff_Fwd_Pkts]  = np.max(arr_time_diff_fwd_pkts)
+        characts_flow[Flow_Charact.Std_Time_Diff_Fwd_Pkts]  = np.std(arr_time_diff_fwd_pkts)
 
-    characts_flow[Flow_Charact.Mean_Time_Diff_Bwd_Pkts] = np.mean(arr_time_diff_bwd_pkts)
-    characts_flow[Flow_Charact.Min_Time_Diff_Bwd_Pkts]  = np.min(arr_time_diff_bwd_pkts)
-    characts_flow[Flow_Charact.Max_Time_Diff_Bwd_Pkts]  = np.max(arr_time_diff_bwd_pkts)
-    characts_flow[Flow_Charact.Std_Time_Diff_Bwd_Pkts]  = np.std(arr_time_diff_bwd_pkts)
+    if len(arr_time_diff_bwd_pkts) == 0:
+        characts_flow[Flow_Charact.Mean_Time_Diff_Bwd_Pkts] = 0
+        characts_flow[Flow_Charact.Min_Time_Diff_Bwd_Pkts]  = 0
+        characts_flow[Flow_Charact.Max_Time_Diff_Bwd_Pkts]  = 0
+        characts_flow[Flow_Charact.Std_Time_Diff_Bwd_Pkts]  = 0
+    else:
+        characts_flow[Flow_Charact.Mean_Time_Diff_Bwd_Pkts] = np.mean(arr_time_diff_bwd_pkts)
+        characts_flow[Flow_Charact.Min_Time_Diff_Bwd_Pkts]  = np.min(arr_time_diff_bwd_pkts)
+        characts_flow[Flow_Charact.Max_Time_Diff_Bwd_Pkts]  = np.max(arr_time_diff_bwd_pkts)
+        characts_flow[Flow_Charact.Std_Time_Diff_Bwd_Pkts]  = np.std(arr_time_diff_bwd_pkts)
 
     if characts_flow[Flow_Charact.Len_Bwd_Packets] != 0:
         characts_flow[Flow_Charact.Ratio_Size_Down_UP] = characts_flow[Flow_Charact.Len_Fwd_Packets] / \
@@ -380,35 +419,55 @@ def CulcCharactsFlowOnWindow(array_paket_flow: list, ip_client: list):
     else:
         characts_flow[Flow_Charact.Ratio_Size_Down_UP] = np.inf
 
-    characts_flow[Flow_Charact.Speed_Bytes_Fwd]  = characts_flow[Flow_Charact.Len_Fwd_Packets] / \
-                                                   characts_flow[Flow_Charact.Duration_Flow]
-    characts_flow[Flow_Charact.Speed_Bytes_Bwd]  = characts_flow[Flow_Charact.Len_Bwd_Packets] / \
-                                                   characts_flow[Flow_Charact.Duration_Flow]
-    characts_flow[Flow_Charact.Speed_Pkts_Fwd]   = characts_flow[Flow_Charact.Count_Fwd_Packets] / \
-                                                   characts_flow[Flow_Charact.Duration_Flow]
-    characts_flow[Flow_Charact.Speed_Pkts_Bwd]   = characts_flow[Flow_Charact.Count_Bwd_Packets] / \
-                                                   characts_flow[Flow_Charact.Duration_Flow]
-    characts_flow[Flow_Charact.Speed_Bytes_Flow] = characts_flow[Flow_Charact.Len_Packets] / \
-                                                   characts_flow[Flow_Charact.Duration_Flow]
-    characts_flow[Flow_Charact.Speed_Pkts_Flow]  = characts_flow[Flow_Charact.Count_Packets_Flow] / \
-                                                   characts_flow[Flow_Charact.Duration_Flow]
+    if characts_flow[Flow_Charact.Duration_Flow] != 0:
+        characts_flow[Flow_Charact.Speed_Bytes_Fwd]  = characts_flow[Flow_Charact.Len_Fwd_Packets] / \
+                                                       characts_flow[Flow_Charact.Duration_Flow]
+        characts_flow[Flow_Charact.Speed_Bytes_Bwd]  = characts_flow[Flow_Charact.Len_Bwd_Packets] / \
+                                                       characts_flow[Flow_Charact.Duration_Flow]
+        characts_flow[Flow_Charact.Speed_Pkts_Fwd]   = characts_flow[Flow_Charact.Count_Fwd_Packets] / \
+                                                       characts_flow[Flow_Charact.Duration_Flow]
+        characts_flow[Flow_Charact.Speed_Pkts_Bwd]   = characts_flow[Flow_Charact.Count_Bwd_Packets] / \
+                                                       characts_flow[Flow_Charact.Duration_Flow]
+        characts_flow[Flow_Charact.Speed_Bytes_Flow] = characts_flow[Flow_Charact.Len_Packets] / \
+                                                       characts_flow[Flow_Charact.Duration_Flow]
+        characts_flow[Flow_Charact.Speed_Pkts_Flow]  = characts_flow[Flow_Charact.Count_Packets_Flow] / \
+                                                       characts_flow[Flow_Charact.Duration_Flow]
+    else:
+        characts_flow[Flow_Charact.Speed_Bytes_Fwd]  = np.inf
+        characts_flow[Flow_Charact.Speed_Bytes_Bwd]  = np.inf
+        characts_flow[Flow_Charact.Speed_Pkts_Fwd]   = np.inf
+        characts_flow[Flow_Charact.Speed_Pkts_Bwd]   = np.inf
+        characts_flow[Flow_Charact.Speed_Bytes_Flow] = np.inf
+        characts_flow[Flow_Charact.Speed_Pkts_Flow]  = np.inf
 
-    characts_flow[Flow_Charact.Mean_Active_Time_Flow] = np.mean(arr_time_active_flow)
-    characts_flow[Flow_Charact.Min_Active_Time_Flow]  = np.min(arr_time_active_flow)
-    characts_flow[Flow_Charact.Max_Active_Time_Flow]  = np.max(arr_time_active_flow)
-    characts_flow[Flow_Charact.Std_Active_Time_Flow]  = np.std(arr_time_active_flow)
+    if len(arr_time_active_flow) == 0:
+        characts_flow[Flow_Charact.Mean_Active_Time_Flow] = 0
+        characts_flow[Flow_Charact.Min_Active_Time_Flow]  = 0
+        characts_flow[Flow_Charact.Max_Active_Time_Flow]  = 0
+        characts_flow[Flow_Charact.Std_Active_Time_Flow]  = 0
+    else:
+        characts_flow[Flow_Charact.Mean_Active_Time_Flow] = np.mean(arr_time_active_flow)
+        characts_flow[Flow_Charact.Min_Active_Time_Flow]  = np.min(arr_time_active_flow)
+        characts_flow[Flow_Charact.Max_Active_Time_Flow]  = np.max(arr_time_active_flow)
+        characts_flow[Flow_Charact.Std_Active_Time_Flow]  = np.std(arr_time_active_flow)
 
-    characts_flow[Flow_Charact.Mean_InActive_Time_Flow] = np.mean(arr_time_inactive_flow)
-    characts_flow[Flow_Charact.Min_InActive_Time_Flow]  = np.min(arr_time_inactive_flow)
-    characts_flow[Flow_Charact.Max_InActive_Time_Flow]  = np.max(arr_time_inactive_flow)
-    characts_flow[Flow_Charact.Std_InActive_Time_Flow]  = np.std(arr_time_inactive_flow)
+    if len(arr_time_inactive_flow) == 0:
+        characts_flow[Flow_Charact.Mean_InActive_Time_Flow] = 0
+        characts_flow[Flow_Charact.Min_InActive_Time_Flow]  = 0
+        characts_flow[Flow_Charact.Max_InActive_Time_Flow]  = 0
+        characts_flow[Flow_Charact.Std_InActive_Time_Flow]  = 0
+    else:
+        characts_flow[Flow_Charact.Mean_InActive_Time_Flow] = np.mean(arr_time_inactive_flow)
+        characts_flow[Flow_Charact.Min_InActive_Time_Flow]  = np.min(arr_time_inactive_flow)
+        characts_flow[Flow_Charact.Max_InActive_Time_Flow]  = np.max(arr_time_inactive_flow)
+        characts_flow[Flow_Charact.Std_InActive_Time_Flow]  = np.std(arr_time_inactive_flow)
 
     return characts_flow
 
 
-from timeit import timeit
-
 if __name__ == '__main__':
+    from timeit import timeit
+
     traffic_file = "D:\\Пользователи\\Admin\\Рабочий стол\\Статья по КБ\\RATDetect\\data\\pcap\\traffic_RAT_NingaliNET\\traffic_RAT_NingaliNET_1_filter.pcapng"
     ip_client = [int.from_bytes(IPv4Address("192.168.10.128").packed, byteorder="big")]
     arr_pkts = []
