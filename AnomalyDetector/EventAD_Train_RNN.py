@@ -101,7 +101,7 @@ def main(versia, window_size, arhiteche):
 
 
 if __name__ == '__main__':
-    versia = "0.4.7.1_LSTM"
+    versia = "0.5.0"
     window_size = 1
     arhiteche = {"1_Input": (window_size, 112),
                  "2_LSTM_seq": (56, 112), "3_LSTM_seq": (28, 56), "4_GRU": (14, 28),

@@ -1,11 +1,10 @@
 from AutoEncoder_RNN import *
 from pathlib import Path
 
-def main(versia, arhiteche):
+def main(versia, arhiteche, window_size):
     # Параметры датасета
-    batch_size          = 1000
+    batch_size          = 1
     validation_factor   = 0.05
-    window_size         = 1000
     feature_range       = (-1, 1)
 
     # Параметры оптимизатора
@@ -15,19 +14,31 @@ def main(versia, arhiteche):
     staircase           = True
 
     # Параметры нейронной сети
-    epochs              = 1
+    epochs              = 3
     continue_education  = False
     checkpoint          = None
-    shuffle             = False
+    checkpoint_epoch    = 0
+    shaffle             = True
     loss_func           = keras.losses.mse
     arhiteche           = arhiteche
     versia              = versia
     path_model          = "modeles\\TrafficAnomalyDetector\\" + versia + "\\"
     model_name          = path_model + "model_TAD_v" + versia
     max_min_file        = path_model + "M&M_traffic_VNAT.csv"
-    dataset             = "F:\\VNAT\\Mytraffic\\youtube_me\\learn_and_valid_dataset\\dataset_all.csv"
+    dataset             = "F:\\VNAT\\Mytraffic\\traffic_narmal\\dataset_all.csv"
     history_name        = path_model + "history_train_v" + versia + ".csv"
     history_valid_name  = path_model + "history_valid_v" + versia + ".csv"
+
+    if continue_education:
+        if Path(path_model+"\\Checkpoint\\checkpoint").exists():
+            with open(path_model+"\\Checkpoint\\checkpoint", "r") as file:
+                str1 = file.readline()
+                idx = str1.find(': "') + 3
+                checkpoint = str1[idx:-2]
+                checkpoint_epoch = int(checkpoint[6:])
+                print(checkpoint_epoch)
+        else:
+            continue_education = False
 
     if not Path(path_model).exists():
         Path(path_model).mkdir()
@@ -36,23 +47,25 @@ def main(versia, arhiteche):
         Path(path_model + "Checkpoint\\").mkdir()
 
     data = pd.read_csv(dataset)
-    data = data.drop(["Time_Stamp"], axis=1)
-    data = data.drop(["Count_src_is_dst_ports"], axis=1)
-    data = data.drop(["Dev_size_TCP_paket"], axis=1)
-    data = data.drop(["Dev_size_UDP_paket"], axis=1)
-    data = data.drop(["Dev_client_paket_size"], axis=1)
-    data = data.drop(["Dev_server_paket_size"], axis=1)
+    data = data.drop(["Flow_Charact.Time_Stamp_Start"], axis=1)
+    data = data.drop(["Flow_Charact.Time_Stamp_End"], axis=1)
+    data = data.drop(["Flow_Charact.Src_IP_Flow"], axis=1)
+    data = data.drop(["Flow_Charact.Dst_IP_Flow"], axis=1)
+    data = data.drop(["Flow_Charact.Src_Port_Flow"], axis=1)
+    data = data.drop(["Flow_Charact.Dst_Port_Flow"], axis=1)
 
+    # print(data.to_dict("records"))
     print("Загрузка датасета завершена.")
 
-    training_dataset = TrainingDatasetGen(data, max_min_file, feature_range, batch_size, window_size,
-                                          validation_factor)
-    print(training_dataset.numbs_count, training_dataset.caracts_count)
+    training_dataset = TrainingDatasetGen(data, max_min_file, feature_range, 0,
+                                          batch_size, window_size, validation_factor)
     print("Обучающий датасет создан.")
 
-    autoencoder = Autoencoder(training_dataset.caracts_count, arhiteche, window_size)
+    autoencoder = Autoencoder(training_dataset.caracts_count, arhiteche, window_size, batch_size)
     autoencoder.build((1, window_size, training_dataset.caracts_count))
     autoencoder.summary()
+    autoencoder.encoder_model.summary()
+    autoencoder.decoder_model.summary()
 
     # lr_schedule = keras.optimizers.schedules.ExponentialDecay(
     #     init_learning_rate,
@@ -63,7 +76,7 @@ def main(versia, arhiteche):
     #
     # optimizer = keras.optimizers.Adam(learning_rate=lr_schedule)
 
-    autoencoder.compile(optimizer="adam", loss=loss_func)
+    autoencoder.compile(optimizer="adam")  # loss=autoencoder.loss_for_vae
     print("Автоэнкодер определён.")
 
     if continue_education:
@@ -74,7 +87,7 @@ def main(versia, arhiteche):
         checkpoint = None
         print("Начинаем обучение:")
 
-    autoencoder.education(training_dataset, epochs=epochs, shuffle=shuffle,
+    autoencoder.education(training_dataset, epochs=epochs, shaffle=shaffle,
                           model_checkname=path_model + "Checkpoint\\", versia=versia,
                           path_model=path_model, checkpoint=checkpoint)
     autoencoder.save(model_name)
@@ -84,13 +97,17 @@ def main(versia, arhiteche):
 
 
 if __name__ == '__main__':
-    # print(device_lib.list_local_devices())
-    print("Ожидаем начала обучения!")
-    # time.sleep(9000)
-    print("Запускаем обучение!")
+    versia = "0.9.4_vae"
+    window_size = 1
+    # arhiteche = {"1_Input": (window_size, 59),
+    #              "2_GRU_seq": (45, 59), "3_GRU_seq": (30, 45), "4_GRU": (15, 30),
+    #              "5_RepeatVector": (window_size, None),
+    #              "6_GRU_seq": (30, 15), "7_GRU_seq": (45, 30), "8_GRU": (59, 45)}
 
-    arhiteche = {"GRU_1": (14, 15), "GRU_2": (13, 14), "GRU_3": (12, 13), "GRU_4": (11, 12),
-                 "GRU_5": (12, 11), "GRU_6": (13, 12), "GRU_7": (14, 13), "GRU_8": (15, 14)}
-    versia = "0.8.7.2"
+    encoder = {"1_Input": (window_size, 59), "2_GRU_seq": (45, 59), "3_GRU_seq": (30, 45), "4_GRU": (15, 30)}
+    decoder = {"5_RepeatVector": (window_size, None), "6_GRU_seq": (30, 15), "7_GRU_seq": (45, 30), "8_GRU": (59, 45)}
+    hidden_space_normalization = 15
+
+    arhiteche = (encoder, hidden_space_normalization, decoder)
     print("\n\n" + versia)
-    main(versia, arhiteche)
+    main(versia, arhiteche, window_size)

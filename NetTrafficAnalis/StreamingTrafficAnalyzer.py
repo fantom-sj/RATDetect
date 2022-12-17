@@ -1,6 +1,6 @@
 from ipaddress import IPv4Address
 from NetTrafficAnalis.TrafficСharacts import CulcCharactsFlowOnWindow, \
-    ParseTraffic, Packet_Charact, HUNDREDS_OF_NANOSECONDS
+    ParseTraffic, Packet_Charact, Flow_Charact, HUNDREDS_OF_NANOSECONDS
 from threading import Thread
 from pathlib import Path
 
@@ -200,13 +200,18 @@ class SnifferTraffic(Thread):
 
 
 class AnalyzerPackets(Thread):
-    def __init__(self, flow_time_limit, charact_file_length, traffic_waiting_time, charact_file_mask, ip_client, path_name):
+    def __init__(self, flow_time_limit, charact_file_length,
+                 traffic_waiting_time, charact_file_mask, ip_client, path_name):
         super().__init__()
 
         self.flow_time_limit        = flow_time_limit
         self.charact_file_length    = charact_file_length
         self.charact_file_mask      = charact_file_mask
         self.path_name              = path_name
+
+        for idx in range(len(ip_client)):
+            if not isinstance(ip_client[idx], IPv4Address):
+                ip_client[idx] = IPv4Address(ip_client[idx])
 
         self.ip_client = [int.from_bytes(ip.packed, byteorder="big") for ip in ip_client]
 
@@ -259,18 +264,18 @@ class AnalyzerPackets(Thread):
                 file_arr.append(file)
 
         if len(file_arr) > 0:
-            indexs_files_pcapng = []
+            indexs_files_charact = []
 
             # Получение индексов файлов с трафиком
             for file_name in file_arr:
                 index_file = int(file_name.split(".")[0].split("\\")[-1].split("_")[-1])
-                indexs_files_pcapng.append(index_file)
+                indexs_files_charact.append(index_file)
 
-            indexs_files_pcapng.sort()
+            indexs_files_charact.sort()
 
-            self.index_charact_file = indexs_files_pcapng[-1]
+            self.index_charact_file = indexs_files_charact[-1]
         else:
-            self.index_charact_file = 0
+            self.index_charact_file = -1
 
     def ParseTrafficFile(self, file_name):
         for paket in ParseTraffic(file_name):
@@ -282,9 +287,10 @@ class AnalyzerPackets(Thread):
         file_only_name = file_name.split("\\")[-1]
         Path(file_name).rename(path_new + "\\" + file_only_name)
 
-    def ProcessingTraffic(self, arr_traffic_file):
-        for file in arr_traffic_file:
-            self.ParseTrafficFile(file)
+    def ProcessingTraffic(self, arr_traffic_file=None):
+        if not arr_traffic_file is None:
+            for file in arr_traffic_file:
+                self.ParseTrafficFile(file)
 
         for pkt in self.array_paket_global:
             self.NetFlows_obj.appendPacket(pkt)
@@ -329,6 +335,16 @@ class AnalyzerPackets(Thread):
             except Exception as err:
                 logging.exception(f"Ошибка!\n{err}")
                 return False
+
+    def PaketsAnalyz(self, pakets):
+        for pkt in pakets:
+            self.array_paket_global.append(pkt)
+
+        if Path(self.path_name).exists():
+            print("Запущен анализ заданных пакетов")
+            self.ProcessingTraffic()
+        else:
+            print("Директория с трафиком для анализа не существует, видимо процесс сбора трафика не был запущен ранее!")
 
     def run(self):
         print("Поток анализа трафика запущен")

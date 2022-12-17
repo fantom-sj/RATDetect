@@ -6,9 +6,25 @@ from abc import ABCMeta
 from keras.utils import Progbar
 from tensorflow import keras
 from keras import Model
+from keras.backend import random_normal, exp, reshape, sum, square
 
 import tensorflow as tf
 import numpy as np
+
+
+def noiser(args):
+    z_mean, z_log_var, batch_size, hidden_space = args
+    N = random_normal(shape=(batch_size, hidden_space), mean=0, stddev=1.0)
+    return exp(z_log_var / 2) * N + z_mean
+
+
+def loss_for_vae(x, y, args):
+    z_mean, z_log_var, batch_size, characts_count = args
+    x = reshape(x, shape=(batch_size, characts_count))
+    y = reshape(y, shape=(batch_size, characts_count))
+    loss = sum(square(x - y), axis=-1)
+    kl_loss = -0.5 * sum(1 + z_log_var - square(z_mean) - exp(z_log_var), axis=-1)
+    return loss + kl_loss
 
 
 class AutoencoderBase(Model, metaclass=ABCMeta):
@@ -27,10 +43,22 @@ class AutoencoderBase(Model, metaclass=ABCMeta):
         self.valid_loss_tracker = keras.metrics.Mean(name="valid_loss")
         self.valid_mae_metric = keras.metrics.MeanAbsoluteError(name="valid_mae")
 
+        self.characts_count             = None
+        self.batch_size                 = None
+        self.hidden_space_normalization = None
+
     def train_step(self, x_batch_train):
         with tf.GradientTape() as tape:
             logits = self.__call__(x_batch_train)
-            loss_value = self.loss(x_batch_train, logits)
+            z_mean_res = tf.gather(logits, [i for i in range(0, self.hidden_space_normalization)], axis=-1)
+            z_log_var_res = tf.gather(logits, [i for i in range(self.hidden_space_normalization,
+                                                                self.hidden_space_normalization * 2)], axis=-1)
+            y = tf.gather(logits, [i for i in range(self.hidden_space_normalization * 2,
+                                                    self.characts_count +
+                                                    (self.hidden_space_normalization * 2))], axis=-1)
+            loss_value = loss_for_vae(x_batch_train, y, (z_mean_res, z_log_var_res,
+                                                         self.batch_size, self.characts_count))
+
 
         trainable_vars = self.trainable_variables
         gradients = tape.gradient(loss_value, trainable_vars)
@@ -41,11 +69,11 @@ class AutoencoderBase(Model, metaclass=ABCMeta):
         # Обновляем метрику на обучении.
         loss = float(np.mean(np.array(loss_value)[0]))
         self.loss_tracker.update_state(loss_value)
-        self.mae_metric.update_state(x_batch_train, logits)
+        self.mae_metric.update_state(x_batch_train, y)
 
         return loss
 
-    def education(self, training_dataset, epochs=1, sdvig=True,
+    def education(self, training_dataset, epochs=1, shaffle=False,
                   model_checkname="model", versia="1", path_model="", checkpoint=None):
         metrics_names = ["Расхождение", "Средние расхождение", "Средняя абсолютная ошибка", "Скорость обучения"]
 
@@ -54,11 +82,12 @@ class AutoencoderBase(Model, metaclass=ABCMeta):
 
         if checkpoint is None:
             start = 0
+            checkpoint = 1
         else:
             start = checkpoint
 
         with summary_writer.as_default():
-            global_step = (len(training_dataset)+training_dataset.get_valid_len())*checkpoint
+            global_step = (len(training_dataset)+training_dataset.get_valid_len()) * checkpoint
             tf.summary.trace_on(graph=True)
             # tf.profiler.experimental.Profile(path_log)
             # tf.profiler.experimental.start(path_log)
@@ -73,9 +102,9 @@ class AutoencoderBase(Model, metaclass=ABCMeta):
                 # Итерируем по пакетам в датасете.
                 for step, x_batch_train in enumerate(training_dataset):
                     with tf.profiler.experimental.Trace("Train", step_num=step):
-                        loss = self.train_step(x_batch_train) * 100
-                    loss_tracker_res = self.loss_tracker.result() * 100
-                    mae_metric_res = self.mae_metric.result() * 100
+                        loss = self.train_step(x_batch_train)
+                    loss_tracker_res = self.loss_tracker.result()
+                    mae_metric_res = self.mae_metric.result()
 
                     # Пишем лог после прохождения каждого батча
                     global_step += 1
@@ -113,14 +142,25 @@ class AutoencoderBase(Model, metaclass=ABCMeta):
                 try:
                     for step, valid_batch_x in enumerate(training_dataset.get_valid()):
                         val_logits = self.__call__(valid_batch_x)
-                        valid_loss_value = self.loss(valid_batch_x, val_logits)
+                        z_mean_res = tf.gather(val_logits,
+                                               [i for i in range(0, self.hidden_space_normalization)], axis=-1)
+                        z_log_var_res = tf.gather(val_logits,
+                                                  [i for i in range(self.hidden_space_normalization,
+                                                                    self.hidden_space_normalization * 2)], axis=-1)
+                        y_restore = tf.gather(val_logits,
+                                              [i for i in range(self.hidden_space_normalization * 2,
+                                                                self.characts_count +
+                                                                (self.hidden_space_normalization * 2))], axis=-1)
+                        valid_loss_value = loss_for_vae(x_batch_train, y_restore, (z_mean_res, z_log_var_res,
+                                                                                   self.batch_size,
+                                                                                   self.characts_count))
 
                         self.valid_loss_tracker.update_state(valid_loss_value)
                         self.valid_mae_metric.update_state(valid_batch_x, val_logits)
 
-                        valid_loss = float(np.mean(np.array(valid_loss_value)[0])) * 100
-                        valid_loss_tracker_res = float(self.valid_loss_tracker.result()) * 100
-                        valid_mae_metric_res = float(self.valid_mae_metric.result()) * 100
+                        valid_loss = float(np.mean(np.array(valid_loss_value)[0]))
+                        valid_loss_tracker_res = float(self.valid_loss_tracker.result())
+                        valid_mae_metric_res = float(self.valid_mae_metric.result())
 
                         values = [("Ошибка", valid_loss),
                                   ("Средние ошибка", valid_loss_tracker_res),
@@ -138,7 +178,7 @@ class AutoencoderBase(Model, metaclass=ABCMeta):
                 except:
                     print("Ошибка при валидации!")
 
-                if sdvig and (epoch != (epochs - 1)):
+                if shaffle and (epoch != (epochs - 1)):
                     training_dataset.on_epoch_end()
 
             tf.summary.trace_export("graph", step=global_step, profiler_outdir=path_log)

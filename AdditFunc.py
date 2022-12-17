@@ -222,14 +222,9 @@ def main():
     #
     # merge_csv(str(path) + "\\VNAT_nonvpn.csv", file_arr)
 
-    # merge_csv("F:\\VNAT\\Mytraffic\\youtube_me\\learn_and_valid_dataset\\dataset_all.csv", [
-    #     "F:\\VNAT\\Mytraffic\\youtube_me\\learn_and_valid_dataset\\dataset_0.csv",
-    #     "F:\\VNAT\\Mytraffic\\youtube_me\\learn_and_valid_dataset\\dataset_1.csv",
-    #     "F:\\VNAT\\Mytraffic\\youtube_me\\learn_and_valid_dataset\\dataset_2.csv",
-    #     "F:\\VNAT\\Mytraffic\\youtube_me\\learn_and_valid_dataset\\dataset_3.csv",
-    #     "F:\\VNAT\\Mytraffic\\youtube_me\\learn_and_valid_dataset\\dataset_4.csv",
-    #     "F:\\VNAT\\Mytraffic\\youtube_me\\learn_and_valid_dataset\\dataset_5.csv"
-    # ])
+    merge_csv("F:\\VNAT\\Mytraffic\\traffic_narmal\\dataset_all.csv", [
+        f"F:\\VNAT\\Mytraffic\\traffic_narmal\\dataset_{i}.csv" for i in range(1, 76, 1)
+    ])
 
     # versia          = "0.8.6.2"
     # path_model      = "D:\\Пользователи\\Admin\\Рабочий стол\\Статья по КБ\\RATDetect\\" \
@@ -243,7 +238,7 @@ def main():
     #
     # print_model_res(path_model, train, valid, feature_range, window_length, window_valid, polyorder)
 
-    print_anomaly()
+    # print_anomaly()
 
 if __name__ == '__main__':
     main()
