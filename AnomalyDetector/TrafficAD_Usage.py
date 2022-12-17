@@ -61,10 +61,10 @@ def CreateTestDataset(window_size):
 def main():
 
     # Парамеры автоэнкодера
-    versia          = "0.9.3_vae"
+    versia          = "0.9.4"
     batch_size      = 1
     window_size     = 1
-    # loss_func       = AutoencoderBase.loss_for_vae
+    loss_func       = keras.losses.mse
     max_min_file    = "modeles\\TrafficAnomalyDetector\\" + versia + "\\M&M_traffic_VNAT.csv"
     model           = "modeles\\TrafficAnomalyDetector\\" + versia + "\\model_TAD_v" + versia
     hidden_space    = 15
@@ -107,7 +107,7 @@ def main():
     characts_numpy  = TrainingDatasetGen.normalization(characts_pd, max_min_file, feature_range, True)
 
     numbs_count, characts_count    = characts_numpy.shape
-    batch_count                   = round(numbs_count/batch_size)
+    batch_count                    = round(numbs_count/batch_size)
 
     # Определение автоэнкодера
     autoencoder = tf.keras.models.load_model(model, custom_objects={"noiser": noiser})
@@ -123,31 +123,24 @@ def main():
         batch_x = []
         for i in range(batch_size):
             batch_x.append(characts_numpy[i + (idx * batch_size):window_size + i + (idx * batch_size)])
-            loss = 0
         try:
             batch_x = tf.convert_to_tensor(batch_x)
             # batch_x = tf.reshape(batch_x, (1, windows_size, characts_count))
-            logits = autoencoder.predict(batch_x, verbose=0)
-            z_mean_res = tf.gather(logits, [i for i in range(0, hidden_space)], axis=-1)
-            z_log_var_res = tf.gather(logits, [i for i in range(hidden_space, hidden_space * 2)], axis=-1)
-            batch_x_restored = tf.gather(logits, [i for i in range(hidden_space * 2,
-                                                  characts_count + (hidden_space * 2))], axis=-1)
-            loss = loss_for_vae(batch_x, batch_x_restored, (z_mean_res, z_log_var_res,
-                                                            batch_size, characts_count))
+            batch_x_restored = autoencoder.predict(batch_x, verbose=0)
 
-            # loss = tf.math.reduce_mean(loss, 1)
+            loss = loss_func(batch_x, batch_x_restored)
+            loss = tf.math.reduce_mean(loss, 1)
             if idx == 0:
                 metrics_analiz["loss"] = loss
             else:
                 metrics_analiz["loss"] = tf.concat([metrics_analiz["loss"], loss], axis=0)
-            # mean_loss = tf.math.multiply(tf.math.reduce_mean(loss), tf.constant(100, dtype=tf.float32))
-            values = [("Расхождение", loss)]
+            mean_loss = tf.math.multiply(tf.math.reduce_mean(loss), tf.constant(100, dtype=tf.float64))
+            values = [("Расхождение", mean_loss)]
             progress_bar.add(1, values=values)
 
         except Exception as err:
             logging.exception(f"Ошибка!\n{err}")
             print(batch_x.shape)
-            print(np.array(loss))
             continue
 
     # metrics_analiz_norm = TrainingDatasetGen.normalization(pd.DataFrame(metrics_analiz),

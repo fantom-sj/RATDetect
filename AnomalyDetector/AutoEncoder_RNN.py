@@ -21,23 +21,15 @@ class Autoencoder(AutoencoderBase):
         и как происходит обратное распространение ошибки для обучения.
     """
 
-    def __init__(self, characts_count: int, arhiteche, window_size=1000, batch_size=1):
+    def __init__(self, characts_count: int, arhiteche: (), window_size=1000, batch_size=1):
         super(Autoencoder, self).__init__()
         self.batch_size     = batch_size
         self.window_size    = window_size
         self.characts_count = characts_count
 
-        encoder, self.hidden_space_normalization, decoder = arhiteche
+        encoder, decoder = arhiteche
         self.encoder_model = self.createSubModel(encoder, "encoder_model")
         self.decoder_model = self.createSubModel(decoder, "decoder_model")
-
-        self.z_mean    = Sequential([Dense(self.hidden_space_normalization, dtype="float64")], name="mean_layer")
-        self.z_log_var = Sequential([Dense(self.hidden_space_normalization, dtype="float64")], name="log_var_layer")
-
-        if self.hidden_space_normalization:
-            self.hidden_space = Lambda(noiser, output_shape=(self.hidden_space_normalization,), name="hidden_space")
-        else:
-            self.hidden_space = None
 
         self.loss_tracker = keras.metrics.Mean(name="loss")
         self.mae_metric = keras.metrics.MeanAbsoluteError(name="mae")
@@ -110,17 +102,8 @@ class Autoencoder(AutoencoderBase):
 
     def call(self, input_features, **kwargs):
         encoder_res = self.encoder_model(input_features)
-        z_mean_res    = self.z_mean(encoder_res)
-        z_log_var_res = self.z_log_var(encoder_res)
-
-        if not (self.hidden_space is None):
-            hidden_space_res = self.hidden_space([z_mean_res, z_log_var_res,
-                                                  self.batch_size, self.hidden_space_normalization])
-        else:
-            hidden_space_res = encoder_res
-        decoder_res = self.decoder_model(hidden_space_res)
-        res = tf.concat([z_mean_res, z_log_var_res, decoder_res], axis=-1)
-        return res
+        decoder_res = self.decoder_model(encoder_res)
+        return decoder_res
 
 
 class TrainingDatasetGen(keras.utils.Sequence):

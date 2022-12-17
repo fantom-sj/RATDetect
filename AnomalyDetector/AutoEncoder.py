@@ -45,20 +45,11 @@ class AutoencoderBase(Model, metaclass=ABCMeta):
 
         self.characts_count             = None
         self.batch_size                 = None
-        self.hidden_space_normalization = None
 
     def train_step(self, x_batch_train):
         with tf.GradientTape() as tape:
             logits = self.__call__(x_batch_train)
-            z_mean_res = tf.gather(logits, [i for i in range(0, self.hidden_space_normalization)], axis=-1)
-            z_log_var_res = tf.gather(logits, [i for i in range(self.hidden_space_normalization,
-                                                                self.hidden_space_normalization * 2)], axis=-1)
-            y = tf.gather(logits, [i for i in range(self.hidden_space_normalization * 2,
-                                                    self.characts_count +
-                                                    (self.hidden_space_normalization * 2))], axis=-1)
-            loss_value = loss_for_vae(x_batch_train, y, (z_mean_res, z_log_var_res,
-                                                         self.batch_size, self.characts_count))
-
+            loss_value = self.loss(x_batch_train, logits)
 
         trainable_vars = self.trainable_variables
         gradients = tape.gradient(loss_value, trainable_vars)
@@ -69,7 +60,7 @@ class AutoencoderBase(Model, metaclass=ABCMeta):
         # Обновляем метрику на обучении.
         loss = float(np.mean(np.array(loss_value)[0]))
         self.loss_tracker.update_state(loss_value)
-        self.mae_metric.update_state(x_batch_train, y)
+        self.mae_metric.update_state(x_batch_train, logits)
 
         return loss
 
@@ -99,12 +90,12 @@ class AutoencoderBase(Model, metaclass=ABCMeta):
                                        stateful_metrics=metrics_names)
 
                 itter = len(training_dataset)*epoch
-                # Итерируем по пакетам в датасете.
+
                 for step, x_batch_train in enumerate(training_dataset):
                     with tf.profiler.experimental.Trace("Train", step_num=step):
-                        loss = self.train_step(x_batch_train)
-                    loss_tracker_res = self.loss_tracker.result()
-                    mae_metric_res = self.mae_metric.result()
+                        loss = self.train_step(x_batch_train) * 100
+                    loss_tracker_res = self.loss_tracker.result() * 100
+                    mae_metric_res = self.mae_metric.result() * 100
 
                     # Пишем лог после прохождения каждого батча
                     global_step += 1
@@ -142,25 +133,14 @@ class AutoencoderBase(Model, metaclass=ABCMeta):
                 try:
                     for step, valid_batch_x in enumerate(training_dataset.get_valid()):
                         val_logits = self.__call__(valid_batch_x)
-                        z_mean_res = tf.gather(val_logits,
-                                               [i for i in range(0, self.hidden_space_normalization)], axis=-1)
-                        z_log_var_res = tf.gather(val_logits,
-                                                  [i for i in range(self.hidden_space_normalization,
-                                                                    self.hidden_space_normalization * 2)], axis=-1)
-                        y_restore = tf.gather(val_logits,
-                                              [i for i in range(self.hidden_space_normalization * 2,
-                                                                self.characts_count +
-                                                                (self.hidden_space_normalization * 2))], axis=-1)
-                        valid_loss_value = loss_for_vae(x_batch_train, y_restore, (z_mean_res, z_log_var_res,
-                                                                                   self.batch_size,
-                                                                                   self.characts_count))
+                        valid_loss_value = self.loss(valid_batch_x, val_logits)
 
                         self.valid_loss_tracker.update_state(valid_loss_value)
                         self.valid_mae_metric.update_state(valid_batch_x, val_logits)
 
-                        valid_loss = float(np.mean(np.array(valid_loss_value)[0]))
-                        valid_loss_tracker_res = float(self.valid_loss_tracker.result())
-                        valid_mae_metric_res = float(self.valid_mae_metric.result())
+                        valid_loss = float(np.mean(np.array(valid_loss_value)[0])) * 100
+                        valid_loss_tracker_res = float(self.valid_loss_tracker.result()) * 100
+                        valid_mae_metric_res = float(self.valid_mae_metric.result()) * 100
 
                         values = [("Ошибка", valid_loss),
                                   ("Средние ошибка", valid_loss_tracker_res),

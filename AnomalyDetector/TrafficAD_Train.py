@@ -76,7 +76,7 @@ def main(versia, arhiteche, window_size):
     #
     # optimizer = keras.optimizers.Adam(learning_rate=lr_schedule)
 
-    autoencoder.compile(optimizer="adam")  # loss=autoencoder.loss_for_vae
+    autoencoder.compile(optimizer="adam", loss=loss_func)
     print("Автоэнкодер определён.")
 
     if continue_education:
@@ -97,7 +97,7 @@ def main(versia, arhiteche, window_size):
 
 
 if __name__ == '__main__':
-    versia = "0.9.4_vae"
+    versia = "0.9.4"
     window_size = 1
     # arhiteche = {"1_Input": (window_size, 59),
     #              "2_GRU_seq": (45, 59), "3_GRU_seq": (30, 45), "4_GRU": (15, 30),
@@ -106,8 +106,7 @@ if __name__ == '__main__':
 
     encoder = {"1_Input": (window_size, 59), "2_GRU_seq": (45, 59), "3_GRU_seq": (30, 45), "4_GRU": (15, 30)}
     decoder = {"5_RepeatVector": (window_size, None), "6_GRU_seq": (30, 15), "7_GRU_seq": (45, 30), "8_GRU": (59, 45)}
-    hidden_space_normalization = 15
 
-    arhiteche = (encoder, hidden_space_normalization, decoder)
+    arhiteche = (encoder, decoder)
     print("\n\n" + versia)
     main(versia, arhiteche, window_size)
