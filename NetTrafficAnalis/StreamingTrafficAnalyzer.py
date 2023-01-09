@@ -3,6 +3,7 @@ from NetTrafficAnalis.TrafficСharacts import CulcCharactsFlowOnWindow, \
     ParseTraffic, Packet_Charact, Flow_Charact, HUNDREDS_OF_NANOSECONDS
 from threading import Thread
 from pathlib import Path
+from tqdm import tqdm
 
 import subprocess as sp
 import pandas as pd
@@ -278,14 +279,18 @@ class AnalyzerPackets(Thread):
             self.index_charact_file = -1
 
     def ParseTrafficFile(self, file_name):
+        print(f"Загружается трафик: {file_name}")
+        bar = tqdm(desc="Процесс загрузки")
         for paket in ParseTraffic(file_name):
             self.array_paket_global.append(paket)
+            bar.update(1)
+        bar.close()
 
-        path_new = self.path_name + "\\" + "Обработанные файлы"
-        if not Path(path_new).exists():
-            Path(path_new).mkdir()
-        file_only_name = file_name.split("\\")[-1]
-        Path(file_name).rename(path_new + "\\" + file_only_name)
+        # path_new = self.path_name + "\\" + "Обработанные файлы"
+        # if not Path(path_new).exists():
+        #     Path(path_new).mkdir()
+        # file_only_name = file_name.split("\\")[-1]
+        # Path(file_name).rename(path_new + "\\" + file_only_name)
 
     def ProcessingTraffic(self, arr_traffic_file=None):
         if not arr_traffic_file is None:
@@ -297,6 +302,7 @@ class AnalyzerPackets(Thread):
         self.array_paket_global.clear()
         # NetFlows_obj.printInFile("print.py")
 
+        bar = tqdm(desc="Процесс обработки")
         array_characts = list()
         for nameFlow in list(self.NetFlows_obj.flows):
             if not nameFlow in self.NetFlows_obj.flows:
@@ -306,14 +312,16 @@ class AnalyzerPackets(Thread):
                 if not timeFlow in self.NetFlows_obj.flows[nameFlow].pkts:
                     continue
 
-                if self.NetFlows_obj.flows[nameFlow].current_flow == timeFlow and \
-                        self.NetFlows_obj.flows[nameFlow].status == 1:
-                    continue
-                else:
-                    flow = self.NetFlows_obj.flows[nameFlow].pkts[timeFlow]
-                    flowCharacts = CulcCharactsFlowOnWindow(flow, self.ip_client)
-                    self.NetFlows_obj.delFlow(nameFlow, timeFlow)
-                    array_characts.append(flowCharacts)
+                # if self.NetFlows_obj.flows[nameFlow].current_flow == timeFlow and \
+                #         self.NetFlows_obj.flows[nameFlow].status == 1:
+                #     continue
+                # else:
+                flow = self.NetFlows_obj.flows[nameFlow].pkts[timeFlow]
+                flowCharacts = CulcCharactsFlowOnWindow(flow, self.ip_client)
+                self.NetFlows_obj.delFlow(nameFlow, timeFlow)
+                array_characts.append(flowCharacts)
+                bar.update(1)
+        bar.close()
 
         print(f"Выявлено характеристик: {len(array_characts)}")
 
@@ -327,6 +335,7 @@ class AnalyzerPackets(Thread):
                                      self.charact_file_mask + str(self.index_charact_file) + ".csv"
 
                 pd_characts = pd.DataFrame(array_characts)
+                pd_characts = pd_characts.sort_values(by=Flow_Charact.Time_Stamp_End)
                 pd_characts.to_csv(characts_file_name, index=False)
 
                 print("Парсинг завершился!")
@@ -360,31 +369,51 @@ class AnalyzerPackets(Thread):
                         self.files_traffic_arr.clear()
                     except IndexError:
                         continue
+                return
         else:
             print("Директория с трафиком для анализа не существует, видимо процесс сбора трафика не был запущен ранее!")
 
 
 if __name__ == '__main__':
+    path_name = "F:\\TRAFFIC\\VNAT\\"
+
     # Параметры сборщика трафика
-    size_pcap_length  = 10000
-    iface_name        = "VMware_Network_Adapter_VMnet3"
-    trffic_file_mask  = "traffic_"
-    path_name         = "F:\\VNAT\\Mytraffic\\traffic_narmal"
-    path_tshark       = "Wireshark\\tshark.exe"
+    # size_pcap_length  = 10000
+    # iface_name        = "VMware_Network_Adapter_VMnet3"
+    # trffic_file_mask  = "traffic_"
+    # path_tshark       = "Wireshark\\tshark.exe"
+    #
+    # sniffer = SnifferTraffic(size_pcap_length, iface_name, path_tshark, trffic_file_mask, path_name)
+    # sniffer.start()
 
-    # Дополнительные параметры анализатора трафика
-    flow_time_limit = 1 * 60 * HUNDREDS_OF_NANOSECONDS
-    traffic_waiting_time = 200
-    charact_file_length = 1000000
-    charact_file_name = "dataset_"
-    ip_client = [IPv4Address("192.168.10.128")]
+    # Параметры анализатора трафика
+    flow_time_limit         = 1 * 60 * HUNDREDS_OF_NANOSECONDS
+    traffic_waiting_time    = 200
+    charact_file_length     = 10000000000
 
-    sniffer = SnifferTraffic(size_pcap_length, iface_name, path_tshark, trffic_file_mask, path_name)
-    sniffer.start()
+    # charact_file_name       = "RAT_revenge_"
+    # ip_client               = [IPv4Address("192.168.10.128")]
 
-    analizator = AnalyzerPackets(flow_time_limit, charact_file_length, traffic_waiting_time,
-                                 charact_file_name, ip_client, path_name)
-    analizator.run()
+    # charact_file_name     = "nonvpn_rsync"
+    # VNAT клиенты
+    ip_client = [IPv4Address("10.101.1.100"), IPv4Address("10.103.1.2"), IPv4Address("10.102.1.2"),
+                 IPv4Address("10.104.1.158"), IPv4Address("10.104.1.2"), IPv4Address("10.105.1.2"),
+                 IPv4Address("10.113.1.150"), IPv4Address("10.115.1.2"), IPv4Address("10.114.1.1"),
+                 IPv4Address("10.115.1.123"), IPv4Address("10.118.1.100"), IPv4Address("10.118.1.2"),
+                 IPv4Address("10.116.1.2"), IPv4Address("10.117.1.1"), IPv4Address("10.121.1.130"),
+                 IPv4Address("10.121.1.145"), IPv4Address("10.119.1.197"), IPv4Address("10.119.1.2"),
+                 IPv4Address("10.120.1.1"), IPv4Address("10.122.1.103"), IPv4Address("10.122.1.2"),
+                 IPv4Address("10.123.1.2"), IPv4Address("192.168.0.180")]
+
+    # ip_client             = [IPv4Address("192.168.20.131"), IPv4Address("192.168.20.132"),
+    #                          IPv4Address("192.168.20.133"), IPv4Address("192.168.20.134")]
+
+    for charact_file_name in Path(path_name).iterdir():
+        analizator = AnalyzerPackets(flow_time_limit, charact_file_length, traffic_waiting_time,
+                                     str(charact_file_name).split("\\")[-1], ip_client, str(charact_file_name))
+        analizator.run()
+
+
 
 
 

@@ -37,8 +37,11 @@ def merge_csv(path, csv_file_arr):
     print("Начато объединение файлов.")
     csv_all = pd.DataFrame()
     for file in csv_file_arr:
-        temp_pandas = pd.read_csv(file)
-        csv_all = pd.concat([csv_all, temp_pandas], ignore_index=False)
+        try:
+            temp_pandas = pd.read_csv(file)
+            csv_all = pd.concat([csv_all, temp_pandas], ignore_index=False)
+        except:
+            continue
 
     csv_all.to_csv(path, index=False)
 
@@ -222,8 +225,8 @@ def main():
     #
     # merge_csv(str(path) + "\\VNAT_nonvpn.csv", file_arr)
 
-    merge_csv("F:\\VNAT\\Mytraffic\\traffic_narmal\\dataset_all.csv", [
-        f"F:\\VNAT\\Mytraffic\\traffic_narmal\\dataset_{i}.csv" for i in range(1, 76, 1)
+    merge_csv("F:\\EVENT\\test_dataset_VictimPC\\test_dataset_VictimPC", [
+        f"F:\\EVENT\\test_dataset_VictimPC\\events_characters_{i}.csv" for i in range(0, 112, 1)
     ])
 
     # versia          = "0.8.6.2"
@@ -240,5 +243,32 @@ def main():
 
     # print_anomaly()
 
+
 if __name__ == '__main__':
-    main()
+    data = pd.read_csv("F:\\TRAFFIC\\Mytraffic\\traffic_RATRevenge\\RAT_revenge_0.csv")
+    # data = data.sort_values(by="Flow_Charact.Time_Stamp_End")
+    # data.to_csv("F:\\TRAFFIC\\Mytraffic\\traffic_RATNingaliNET\\traffic_RAT_NingaliNET.csv", index=False)
+
+    RAT_Traffic_1 = data[data["Flow_Charact.Src_IP_Flow"] == 3232238209][data["Flow_Charact.Dst_IP_Flow"] == 3232238208][data["Flow_Charact.Src_Port_Flow"] == 333]
+    RAT_Traffic_2 = data[data["Flow_Charact.Dst_IP_Flow"] == 3232238209][data["Flow_Charact.Src_IP_Flow"] == 3232238208][data["Flow_Charact.Dst_Port_Flow"] == 333]
+
+    RATProcess = pd.concat([RAT_Traffic_1, RAT_Traffic_2], ignore_index=True)
+    RATProcess = RATProcess.sort_values(by="Flow_Charact.Time_Stamp_End")
+    RATProcess.to_csv("F:\\TRAFFIC\\Mytraffic\\traffic_RATRevenge\\RAT_revenge.csv", index=False)
+
+    # NoRAT_Traffic_1 = data[data["Flow_Charact.Src_IP_Flow"] == 3232272203][data["Flow_Charact.Dst_IP_Flow"] != 3232238209]
+    # NoRAT_Traffic_2 = data[data["Flow_Charact.Dst_IP_Flow"] == 3232272203][data["Flow_Charact.Src_IP_Flow"] != 3232238209]
+    #
+    # NoRATTraffic = pd.concat([NoRAT_Traffic_1, NoRAT_Traffic_2], ignore_index=True)
+    # NoRATTraffic = NoRATTraffic.sort_values(by="Flow_Charact.Time_Stamp_End")
+    # NoRATTraffic.to_csv("F:\\TRAFFIC\\Mytraffic\\traffic_normally\\traffic_normally_only_192.168.143.75.csv", index=False)
+
+    # NingaliNETServer = data[data["Events_Charact.Process_Name"] == "NingaliNETServer.exe"]
+    # RabbitHoleServer = data[data["Events_Charact.Process_Name"] == "RabbitHoleServer.exe"]
+    # RevengeRATServer = data[data["Events_Charact.Process_Name"] == "RevengeRATServer.exe"]
+    #
+    # RATProcess = pd.concat([NingaliNETServer, RabbitHoleServer, RevengeRATServer], ignore_index=True)
+    # RATProcess.sort_values(by="Events_Charact.Time_Stamp_End")
+    # RATProcess.to_csv("F:\\EVENT\\test_dataset_VictimPC\\RATProcess.csv", index=False)
+
+    # main()

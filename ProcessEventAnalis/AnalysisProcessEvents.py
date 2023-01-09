@@ -1,4 +1,5 @@
-from ProcessEventAnalis.EventsСharacts import CulcCharactsEventsOnWindow, CHARACTERISTIC_EVENTS
+from ProcessEventAnalis.EventsСharacts import CulcCharactsEventsOnWindow, Event_Charact, \
+    HUNDREDS_OF_NANOSECONDS, Events_Charact
 from ProcessEventAnalis.PMLParser import ParserEvents
 from threading import Thread
 from pathlib import Path
@@ -6,24 +7,126 @@ from tqdm import tqdm
 
 import pandas as pd
 import logging
+import pickle
+import socket
+import struct
 import time
+import ssl
 import math
 
 
-class AnalyzerEvents:
-    def __init__(self, window_size, charact_file_mask, path_name, user_dir):
-        self.window_size            = window_size
+class ProcessThread:
+    def __init__(self):
+        """
+            Возможные статусы процесса:
+            None - процесс только создан, статус отсутствует
+            0 - процесс завершён
+            1 - процесс в активном состоянии
+            -1 - поток прерван из-за временных рамок
+        """
+        self.current_thread = None
+        self.status       = None
+        self.events       = {}
+
+    def append(self, event):
+        if "Process" in event["Operation"] and "Exit" in event["Operation"]:
+            self.status = 0
+            self.events[self.current_thread].append(event)
+        else:
+            self.events[self.current_thread].append(event)
+
+
+class ProcessThreads:
+    def __init__(self, thread_time_limit):
+        self.threads = {}
+        self.thread_time_limit = thread_time_limit
+
+    def creatThread(self, event: dict, name_thread):
+        if not name_thread in self.threads:
+            self.threads[name_thread] = ProcessThread()
+
+        self.threads[name_thread].status = 1
+        self.threads[name_thread].current_thread = event["Date & Time"]
+        self.threads[name_thread].events[self.threads[name_thread].current_thread] = list()
+        self.threads[name_thread].append(event)
+
+    def delThread(self, name_thread, timeThread):
+        del self.threads[name_thread].events[timeThread]
+        if not self.threads[name_thread].events:
+            del self.threads[name_thread]
+
+    def appendEvent(self, event: dict):
+        name_thread = event["Process Name"]
+
+        if not name_thread in self.threads:
+            self.creatThread(event, name_thread)
+        else:
+            if self.threads[name_thread].status == 1:
+                if event["Date & Time"] - self.threads[name_thread].current_thread >= self.thread_time_limit:
+                    self.threads[name_thread].status = -1
+                    self.creatThread(event, name_thread)
+                else:
+                    self.threads[name_thread].append(event)
+            else:
+                self.creatThread(event, name_thread)
+
+    def printInFile(self, file_name):
+        max_subthread = 0
+        add_events = 0
+        with open(file_name, "w") as printthr:
+            for nameThread in self.threads:
+                index = 0
+                printthr.write(f"{nameThread} = {'{'}\n")
+                for timeThread in self.threads[nameThread].events:
+                    index += 1
+                    if index > max_subthread:
+                        max_subthread = index
+                    printthr.write(f"\t{timeThread}: {'{'}\n")
+                    for idx in range(len(self.threads[nameThread].events[timeThread])):
+                        event = self.threads[nameThread].events[timeThread][idx]
+                        add_events += 1
+                        printthr.write(f"\t\t{idx}: {'{'}\n")
+
+                        for ch in Event_Charact:
+                            printthr.write(f"\t\t\t{ch}: {event[ch]},\n")
+                        printthr.write(f"\t\t{'},'}\n")
+                    printthr.write(f"\t{'},'}\n")
+                printthr.write(f"{'}'}\n")
+
+        print(f"Максимальное количество потоков с одинаковым именем: {max_subthread}")
+        print(f"Было записано {add_events} пакетов")
+        print("Запись завершена!")
+
+
+class AnalyzerEvents(Thread):
+    def __init__(self, thread_time_limit, charact_file_mask, path_name, user_dir, HOST, PORT, SERVER_HOST, SERVER_PORT):
+        super().__init__()
+
+        self.thread_time_limit      = thread_time_limit
         self.charact_file_mask      = charact_file_mask
         self.path_name              = path_name
         self.user_dir               = user_dir
 
-        self.files_events_arr       = []
-        self.array_events_global    = []
-        self.process_arr            = []
+        self.files_events_arr       = list()
+        self.array_events_global    = list()
+        self.process_arr            = list()
+
+        self.ProcessThreads_obj = ProcessThreads(self.thread_time_limit)
 
         self.run_analyz             = True
         self.th_main_analyz         = None
         self.index_charact_file     = -1
+
+        self.HOST        = HOST
+        self.PORT        = PORT
+        self.SERVER_HOST = SERVER_HOST
+        self.SERVER_PORT = SERVER_PORT
+
+        self.buffer_waiting = pd.DataFrame()
+        self.max_len_buffer = 20
+
+        self.context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        self.context.load_verify_locations("ca.crt")
 
         self.GetFilesEvents()
 
@@ -91,133 +194,121 @@ class AnalyzerEvents:
             self.index_charact_file = -1
         return self.index_charact_file
 
-    def ProcessingEvents(self, pml_file_name=None):
-        if not (pml_file_name is None):
-            print(f"Запускаем обработку файла: {pml_file_name}")
-            parser = ParserEvents(pml_file_name)
+    def ParsePMLFile(self, file_name):
+        print(f"\nЗапускаем обработку файла: {file_name}")
+        pbar = tqdm(desc="Загрузка событий")
+        parser = ParserEvents(file_name)
+        for event in parser.GenEventIter():
+            self.array_events_global.append(event)
+            pbar.update(1)
+        pbar.close()
 
-            pbar = tqdm(desc="Загрузка событий")
-            for event in parser.GenEventIter():
-                self.array_events_global.append(event)
-                pbar.update(1)
-            pbar.close()
+        path_new = self.path_name + "\\" + "Обработанные файлы"
+        if not Path(path_new).exists():
+            Path(path_new).mkdir()
+        file_only_name = file_name.split("\\")[-1]
+        Path(file_name).rename(path_new + "\\" + file_only_name)
 
-            path_new = self.path_name + "\\" + "Обработанные файлы"
-            if not Path(path_new).exists():
-                Path(path_new).mkdir()
-            file_only_name = pml_file_name.split("\\")[-1]
-            Path(pml_file_name).rename(path_new + "\\" + file_only_name)
+    def ProcessingEvents(self, arr_pml_file=None):
+        if not arr_pml_file is None:
+            for file in arr_pml_file:
+                self.ParsePMLFile(file)
 
-        array_characts  = []
-
-        def analyz_thread_func(batch):
-            ch = CulcCharactsEventsOnWindow(batch, self.user_dir)
-            if ch is not None:
-                array_characts.append(ch)
-
-        thread_arr = []
-        batch_events_process = {}
-        try:
-            pbar = tqdm(total=len(self.array_events_global), desc="Анализ событий")
-            idx = 0
-            while idx < len(self.array_events_global):
-                event = self.array_events_global[idx]
-                process_name = event["Process Name"]
-                # if "1.exe" in process_name:
-                #     idx += 1
-                #     pbar.update(1)
-                #     continue
-
-                if not process_name in batch_events_process:
-                    batch_events_process[process_name] = []
-                batch_events_process[process_name].append(event)
-                idx += 1
-                pbar.update(1)
-                if idx < len(self.array_events_global):
-                    while self.array_events_global[idx]["Process Name"] == process_name:
-                        # if "1.exe" in self.array_events_global[idx]["Process Name"]:
-                        #     idx += 1
-                        #     pbar.update(1)
-                        #     continue
-                        batch_events_process[process_name].append(self.array_events_global[idx])
-                        idx += 1
-                        if idx == len(self.array_events_global):
-                            break
-                        pbar.update(1)
-                        if len(batch_events_process[process_name]) == self.window_size:
-                            thread_arr.append(Thread(target=analyz_thread_func,
-                                                     args=(batch_events_process[process_name],)))
-                            thread_arr[-1].start()
-                            batch_events_process[process_name].clear()
-
-                if len(batch_events_process[process_name]) > 5:
-                    thread_arr.append(Thread(target=analyz_thread_func, args=(batch_events_process[process_name],)))
-                    thread_arr[-1].start()
-                    batch_events_process[process_name].clear()
-
-            for proc_events in batch_events_process:
-                if len(batch_events_process[proc_events]) > 0:
-                    thread_arr.append(Thread(target=analyz_thread_func, args=(batch_events_process[proc_events],)))
-                    thread_arr[-1].start()
-                    batch_events_process[proc_events].clear()
-
-            control = True
-            while control:
-                control = False
-                for thr in thread_arr:
-                    control |= thr.is_alive()
-                print("Ждем окончания анализа...")
-
-            pbar.close()
-
-        except Exception as err:
-            logging.exception(f"Ошибка!\n{err}")
-            return {}
+        pbar = tqdm(total=len(self.array_events_global), desc="Сортировка событий")
+        for event in self.array_events_global:
+            pbar.update(1)
+            if "python" in event["Process Name"] or "pycharm" in \
+                    event["Process Name"] or "Procmon" in event["Process Name"]:
+                continue
+            self.ProcessThreads_obj.appendEvent(event)
 
         self.array_events_global.clear()
-        print(f"Выявлены {len(array_characts)} характеристики событий процессов")
+        pbar.close()
+
+        array_characts  = list()
+        total = len(self.ProcessThreads_obj.threads)
+        for nameThread in list(self.ProcessThreads_obj.threads):
+            total += len(self.ProcessThreads_obj.threads[nameThread].events)
+
+        pbar = tqdm(total=total, desc="Анализ событий")
+        for nameThread in list(self.ProcessThreads_obj.threads):
+            if not nameThread in self.ProcessThreads_obj.threads:
+                continue
+
+            for timeThread in list(self.ProcessThreads_obj.threads[nameThread].events):
+                pbar.update(1)
+                if not timeThread in self.ProcessThreads_obj.threads[nameThread].events:
+                    continue
+
+                if self.ProcessThreads_obj.threads[nameThread].current_thread == timeThread and \
+                        self.ProcessThreads_obj.threads[nameThread].status == 1:
+                    continue
+                else:
+                    thread = self.ProcessThreads_obj.threads[nameThread].events[timeThread]
+                    threadCharacts = CulcCharactsEventsOnWindow(thread, self.user_dir)
+                    self.ProcessThreads_obj.delThread(nameThread, timeThread)
+                    array_characts.append(threadCharacts)
+
+        pbar.close()
 
         if len(array_characts) == 0:
             print("Не выявлено ни одного набора характеристик!")
             return False
         else:
             try:
-                # self.GetLastFileId()
-                self.index_charact_file += 1
-                characts_file_name = self.path_name + "\\" + \
-                                     self.charact_file_mask + str(self.index_charact_file) + ".csv"
-
+                print(f"Выявлены {len(array_characts)} характеристики событий процессов")
                 pd_characts = pd.DataFrame(array_characts)
-                pd_characts = pd_characts.sort_values(by="Time_Stamp_End")
-                pd_characts.to_csv(characts_file_name, index=False)
+                pd_characts.sort_values(by=Events_Charact.Time_Stamp_End)
 
-                print("Парсинг завершился!")
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0) as sock:
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+                    sock.bind((self.HOST, self.PORT))
+
+                    try:
+                        sock.connect((self.SERVER_HOST, self.SERVER_PORT))
+
+                        with self.context.wrap_socket(sock, server_hostname=self.HOST) as client:
+                            if len(self.buffer_waiting) > 0:
+                                pd_characts = pd.concat([self.buffer_waiting, pd_characts], ignore_index=True)
+                                self.buffer_waiting = pd.DataFrame()
+
+                            serialized_data = pickle.dumps(pd_characts, -1)
+                            client.sendall(struct.pack(">I", len(serialized_data)))
+                            client.sendall(serialized_data)
+                            print("Данные успешно отправлены!")
+
+                    except ConnectionRefusedError:
+                        if len(self.buffer_waiting) == 0:
+                            self.buffer_waiting = pd_characts
+                        else:
+                            self.buffer_waiting = pd.concat([self.buffer_waiting, pd_characts], ignore_index=True)
+                            if len(self.buffer_waiting) > self.max_len_buffer:
+                                self.buffer_waiting = self.buffer_waiting.iloc[-self.max_len_buffer:]
+                        print("Не удалось установить соединение с сервером, данные сохранены в буфер")
 
             except Exception as err:
                 logging.exception(f"Ошибка!\n{err}")
 
             return array_characts
 
-    def AnalyzLoop(self):
-
-        while self.run_analyz:
-            count_file_events = self.GetFilesEvents()
-            if count_file_events == 0:
-                time.sleep(10)
-                continue
-            else:
-                try:
-                    self.ProcessingEvents(self.files_events_arr[0])
-                    self.files_events_arr.pop(0)
-                except IndexError:
-                    continue
-
     def run(self):
         if Path(self.path_name).exists():
             self.run_analyz = True
-            self.th_main_analyz = Thread(target=self.AnalyzLoop, args=())
-            self.th_main_analyz.start()
+
             print("Поток предварительного анализа событий процессов запущен")
+
+            while self.run_analyz:
+                count_file_events = self.GetFilesEvents()
+                if count_file_events == 0:
+                    time.sleep(10)
+                    continue
+                else:
+                    try:
+                        self.ProcessingEvents(self.files_events_arr)
+                        self.files_events_arr.clear()
+                    except IndexError:
+                        continue
 
         else:
             print("Директория с файлами событий для анализа не существует")
@@ -228,10 +319,11 @@ class AnalyzerEvents:
 
 
 if __name__ == '__main__':
-    path_name                   = "F:\\EVENT"
-    window_size                 = 50
-    charact_file_name           = "test_dataset_1m_RAT_"
-    user_dir                    = "Жертва"
+    path_name                   = "D:\\train_dataset_Nout"
+    thread_time_limit           = 1 * 50 * HUNDREDS_OF_NANOSECONDS
+    charact_file_name           = "train_dataset_"
+    user_dir                    = "Admin"
 
-    analizator = AnalyzerEvents(window_size, charact_file_name, path_name, user_dir)
-    analizator.run()
+    analizator = AnalyzerEvents(thread_time_limit, charact_file_name, path_name, user_dir)
+    analizator.start()
+    analizator.join()

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html style="">
+  <head>
+    <meta charset="UTF-8">
+    <title>Система мониторинга RAT-троянов</title>
+    <script type="text/javascript" src="/eel.js"></script>
+
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
+    <link rel="stylesheet" href="plugins/fontawesome-free/css/all.min.css">
+    <link rel="stylesheet" href="plugins/fontawesome-free/css/font-awesome.css">
+
+    <link rel="stylesheet" href="style/adminlte.css">
+    <link rel="stylesheet" href="style/style.css">
+
+    <script src="plugins/jquery/jquery.min.js"></script>
+    <script src="plugins/jquery-ui/jquery-ui.min.js"></script>
+
+    <script>
+      $(function(){
+        $("#menu").load("menu.html");
+      });
+    </script>
+
+  </head>
+  <body>
+    <div class="wrapper">
+      <!-- Боковая панель -->
+      <div id="menu"></div>
+
+      <!-- Основной блок-->
+      <div class="content-wrapper">
+        <!-- Заголовок контента -->
+        <div class="content-header">
+          <div class="container-fluid">
+            <div class="row mb-2">
+              <div class="col-sm-6">
+                <h1 class="m-0">Тестирование работы системы мониторинга</h1>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Сам контент-->
+        <section class="content">
+          <div class="container-fluid">
+
+          </div>
+        </section>
+      </div>
+
+    </div>
+
+    <script>
+      $(window).on("load", function() {
+        $("#test").addClass("active");
+      });
+    </script>
+  </body>
+</html>

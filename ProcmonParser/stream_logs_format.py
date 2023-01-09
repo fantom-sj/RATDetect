@@ -253,7 +253,10 @@ class PMLStreamReader(PMLStructReader):
     def __process_idx(self, process_index):
         """Get the actual process from a process index
         """
-        return self._process_table[process_index]
+        try:
+            return self._process_table[process_index]
+        except:
+            return None
 
     def __hostname_idx(self, hostname_ip, is_ipv4):
         """Get the actual hostname from hostname ip

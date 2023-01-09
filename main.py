@@ -41,11 +41,11 @@ def NeiroNetLoad(path_net_traffic, path_net_event):
 if __name__ == '__main__':
     # elevate()
 
-    path_net_traffic = "AnomalyDetector\\modeles\\TrafficAnomalyDetector\\0.8.7.1\\model_TAD_v0.8.7.1"
-    path_net_event   = "AnomalyDetector\\modeles\\EventAnomalyDetector\\0.4.7.1_LSTM\\Checkpoint\\epoch_1"
+    path_net_traffic = "AnomalyDetector\\modeles\\TrafficAnomalyDetector\\0.9.4\\model_TAD_v0.9.4"
+    path_net_event   = "AnomalyDetector\\modeles\\EventAnomalyDetector\\0.6.0\\model_EAD_v0.6.0"
 
     path_traffic_analysis = "WorkDirectory\\"
-    path_event_analysis   = "\\\\VICTIMPC\\RATDetect\\WorkDirectory"
+    protected_devices = {"Жертва": ("192.168.137.1", 62302)}
 
     iface_name = "VMware_Network_Adapter_VMnet3"
     ip_client = [IPv4Address("192.168.10.128")]
@@ -54,11 +54,6 @@ if __name__ == '__main__':
         Path("WorkDirectory\\").mkdir()
     if not Path(path_traffic_analysis).exists():
         Path(path_traffic_analysis).mkdir()
-    if not Path(path_event_analysis).exists():
-        try:
-            Path(path_event_analysis).mkdir()
-        except:
-            print("Защищаемая машина отключена!")
 
     NetTraffic, NetEvent = NeiroNetLoad(path_net_traffic, path_net_event)
 
@@ -66,24 +61,24 @@ if __name__ == '__main__':
     buffer_events       = []
     buffer_anomaly_proc = []
 
-    traffic_analysis = TrafficAnalyser(buffer_traffic, NetTraffic, path_traffic_analysis,
-                                       iface_name, ip_client)
+    # traffic_analysis = TrafficAnalyser(buffer_traffic, NetTraffic, path_traffic_analysis,
+    #                                    iface_name, ip_client)
 
-    event_analysis = EventAnalyser(buffer_events, NetEvent, path_event_analysis)
+    event_analysis = EventAnalyser(buffer_events, NetEvent, protected_devices)
 
-    decision_system = DecisionSystem(buffer_traffic, buffer_events, buffer_anomaly_proc)
+    # decision_system = DecisionSystem(buffer_traffic, buffer_events, buffer_anomaly_proc)
 
-    traffic_analysis.start()
+    # traffic_analysis.start()
     event_analysis.start()
-    decision_system.start()
+    # decision_system.start()
 
     while True:
-        if len(buffer_anomaly_proc) > 0:
-            os.system("echo ---------------------------------------")
-            interim_results = buffer_anomaly_proc.pop(0)
-            for anomaly in interim_results:
-
-                out = f"{anomaly}: {interim_results[anomaly]}"
-                os.system("echo " + out)
+        # if len(buffer_anomaly_proc) > 0:
+        #     os.system("echo ---------------------------------------")
+        #     interim_results = buffer_anomaly_proc.pop(0)
+        #     for anomaly in interim_results:
+        #
+        #         out = f"{anomaly}: {interim_results[anomaly]}"
+        #         os.system("echo " + out)
 
         time.sleep(10)

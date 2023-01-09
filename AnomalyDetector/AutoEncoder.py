@@ -46,6 +46,9 @@ class AutoencoderBase(Model, metaclass=ABCMeta):
         self.characts_count             = None
         self.batch_size                 = None
 
+        self.history_loss = {"epoch": [], "step": [], "loss": [], "mean_loss": [], "mae": []}
+        self.history_valid = {"epoch": [], "step": [], "loss": [], "mean_loss": [], "mae": []}
+
     def train_step(self, x_batch_train):
         with tf.GradientTape() as tape:
             logits = self.__call__(x_batch_train)
@@ -110,6 +113,12 @@ class AutoencoderBase(Model, metaclass=ABCMeta):
                     tf.summary.scalar("Средняя абсолютная ошибка", (float(mae_metric_res)), step=global_step)
                     tf.summary.scalar("Скорость обучения", learning_rate_value, step=global_step)
 
+                    self.history_loss["epoch"].append(epoch)
+                    self.history_loss["step"].append(global_step)
+                    self.history_loss["loss"].append(float(loss / 100))
+                    self.history_loss["mean_loss"].append(float(loss_tracker_res / 100))
+                    self.history_loss["mae"].append(float(mae_metric_res / 100))
+
                     progress_bar.add(1, values=values)
                     itter += 1
 
@@ -151,6 +160,13 @@ class AutoencoderBase(Model, metaclass=ABCMeta):
                         tf.summary.scalar("Ошибка валидации", valid_loss, step=global_step)
                         tf.summary.scalar("Средние ошибка валидации", valid_loss_tracker_res, step=global_step)
                         tf.summary.scalar("Средняя абсолютная ошибка валидации", valid_mae_metric_res, step=global_step)
+
+                        self.history_valid["epoch"].append(epoch)
+                        self.history_valid["step"].append(global_step)
+                        self.history_valid["loss"].append(float(valid_loss / 100))
+                        self.history_valid["mean_loss"].append(float(valid_loss_tracker_res / 100))
+                        self.history_valid["mae"].append(float(valid_mae_metric_res / 100))
+
                         progress_bar_valid.add(1, values=values)
 
                     self.valid_loss_tracker.reset_states()

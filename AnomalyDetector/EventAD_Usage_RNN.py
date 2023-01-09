@@ -107,85 +107,138 @@ def PostAnalys(caracts_np, metrics_analiz):
     plt.show()
 
 
-def main(versia):
+def main():
+    versia = "0.6.0"
+
     # Парамеры автоэнкодера
     batch_size      = 1
     window_size     = 1
     loss_func       = keras.losses.mse
-    max_min_file    = "modeles\\EventAnomalyDetector\\" + versia + "\\M&M_event.csv"
-    model           = "modeles\\EventAnomalyDetector\\" + versia + "\\Checkpoint\\epoch_"
-    results         = "modeles\\EventAnomalyDetector\\" + versia + "\\res_"
+    path_model      = "modeles\\EventAnomalyDetector\\" + versia + "\\"
+    max_min_file    = path_model + "M&M_event.csv"
+    model           = path_model + "model_EAD_v" + versia
+    results         = path_model + "res_"
+    porog_anomaly   = 0.3
 
     anomaly_proc    = {"NingaliNET": "RAT_client", "Rabbit-Hole": "1.exe", "Revenge-RAT": "RAT_client_Rev"}
     color_RAT       = {"NingaliNET": "tab:red", "Rabbit-Hole": "tab:green", "Revenge-RAT": "tab:purple"}
     count_epoch     = 3
 
-    characts_file   = "F:\\EVENT\\EventTest\\test_dataset_1m_RAT_1.csv"
-    feature_range   = (-1, 1)
-    caracts_pd      = pd.read_csv(characts_file)
-    caracts_dt      = caracts_pd.to_dict("list")
-    caracts_np      = caracts_pd.to_numpy()
-    caracts_pd      = caracts_pd.drop(["Time_Stamp_Start"], axis=1)
-    caracts_pd      = caracts_pd.drop(["Time_Stamp_End"], axis=1)
-    caracts_pd      = caracts_pd.drop(["Process_Name"], axis=1)
-    caracts_pd      = caracts_pd.drop(["Count_Events_Batch"], axis=1)
-    caracts_pd      = caracts_pd.drop(["Count_System_Statistics"], axis=1)
-    caracts_numpy   = TrainingDatasetGen.normalization(caracts_pd, max_min_file, feature_range, True).to_numpy()
-    if np.isnan(np.sum(caracts_numpy)):
-        print("В тестовом датасете были обнаружены nan-данные, они были заменены на 0")
-        caracts_numpy = np.nan_to_num(caracts_numpy)
+    path_name         = "\\\\VictimPC\\RATDetect\\WorkDirectory"
+    charact_file_mask = "events_characters_"
 
-    print(f"Анализируем тестовый набора на реальные аномалии")
-    real_anomaly = GetRealAnomaly(anomaly_proc, window_size, caracts_np, color_RAT)
-    pd_real_anomaly = pd.DataFrame(real_anomaly)
-    pd_real_anomaly.to_csv(results+"real_anomaly.csv", index=False)
+    characts_pd = pd.DataFrame()
+    for charact_index in range(112):
+        if charact_index == 76 or charact_index == 83:
+            continue
+        characts_pd = pd.concat([characts_pd, pd.read_csv(f"{path_name}\\{charact_file_mask}{charact_index}.csv")],
+                                ignore_index=True)
+    characts_pd.sort_values(by="Events_Charact.Time_Stamp_End")
+
+    characts_pd      = characts_pd[characts_pd["Events_Charact.Process_Name"] != "python.exe"]
+    feature_range    = (-1, 1)
+    characts_np      = characts_pd.to_dict("records")
+    characts_pd      = characts_pd.drop(["Events_Charact.Time_Stamp_Start"], axis=1)
+    characts_pd      = characts_pd.drop(["Events_Charact.Time_Stamp_End"], axis=1)
+    characts_pd      = characts_pd.drop(["Events_Charact.Process_Name"], axis=1)
+    characts_pd      = characts_pd.drop(["Events_Charact.Direction_IP_Port"], axis=1)
+    characts_pd      = characts_pd.drop(["Events_Charact.Count_Events_Batch"], axis=1)
+    characts_pd      = characts_pd.drop(["Events_Charact.Duration"], axis=1)
+    caracts_numpy    = TrainingDatasetGen.normalization(characts_pd, max_min_file, feature_range, True)
+
+    # print(f"Анализируем тестовый набор на реальные аномалии")
+    # real_anomaly = GetRealAnomaly(anomaly_proc, window_size, caracts_np, color_RAT)
+    # pd_real_anomaly = pd.DataFrame(real_anomaly)
+    # pd_real_anomaly.to_csv(results+"real_anomaly.csv", index=False)
 
     numbs_count, caracts_count    = caracts_numpy.shape
-    batch_count                   = math.floor(numbs_count/batch_size)-1
+    batch_count                   = math.floor(numbs_count/batch_size)
 
-    metric_on_model = {}
-    # autoencoder = Autoencoder(caracts_count, arhiteche, window_size)
+    # Определение автоэнкодера
+    autoencoder = tf.keras.models.load_model(model)
+    # autoencoder.load_weights(model+str(model_index))
+    print(f"Модель {model} загружена")
 
-    for model_index in range(1, count_epoch+1, 1):
-        # Определение автоэнкодера
-        autoencoder = tf.keras.models.load_model(model+str(model_index))
-        # autoencoder.load_weights(model+str(model_index))
-        print(f"Модель {model+str(model_index)} загружена")
+    print("Начинаем прогнозирование аномальных событий.")
+    metrics_analiz = {}
 
-        print("Начинаем прогнозирование аномальных событий.")
-        metrics_analiz = {}
+    valid_metrics_name = ["Расхождение"]
+    # progress_bar = Progbar(batch_count, stateful_metrics=valid_metrics_name)
 
-        valid_metrics_name = ["Расхождение"]
-        progress_bar = Progbar(batch_count, stateful_metrics=valid_metrics_name)
+    for idx in range(0, batch_count, 1):
+        batch_x = []
+        for i in range(batch_size):
+            batch_x.append(caracts_numpy[i + (idx * batch_size):window_size + i + (idx * batch_size)])
+        try:
+            batch_x = tf.convert_to_tensor(batch_x)
+            batch_x_restored = autoencoder.__call__(batch_x)
 
-        for idx in range(0, batch_count, 1):
-            batch_x = []
-            for i in range(batch_size):
-                batch_x.append(caracts_numpy[i + (idx * batch_size):window_size + i + (idx * batch_size)])
-            try:
-                batch_x = tf.convert_to_tensor(batch_x)
-                batch_x_restored = autoencoder.__call__(batch_x)
+            loss = loss_func(batch_x, batch_x_restored)
+            loss = tf.math.reduce_mean(loss, 1)
+            if idx == 0:
+                metrics_analiz["loss"] = loss
+            else:
+                metrics_analiz["loss"] = tf.concat([metrics_analiz["loss"], loss], axis=0)
+            mean_loss = tf.math.reduce_mean(loss) # tf.math.multiply(tf.math.reduce_mean(loss), tf.constant(1, dtype=tf.float32))
+            values = [("Расхождение", mean_loss)]
+            # progress_bar.add(1, values=values)
 
-                loss = loss_func(batch_x, batch_x_restored)
-                loss = tf.math.reduce_mean(loss, 1)
-                if idx == 0:
-                    metrics_analiz["loss"] = loss
-                else:
-                    metrics_analiz["loss"] = tf.concat([metrics_analiz["loss"], loss], axis=0)
-                mean_loss = tf.math.reduce_mean(loss) # tf.math.multiply(tf.math.reduce_mean(loss), tf.constant(1, dtype=tf.float32))
-                values = [("Расхождение", mean_loss)]
-                progress_bar.add(1, values=values)
-            except Exception as err:
-                logging.exception(f"Ошибка!\n{err}")
-                print(np.array(batch_x).shape)
-                continue
+        except Exception as err:
+            logging.exception(f"Ошибка!\n{err}")
+            print(np.array(batch_x).shape)
+            continue
 
-        metric_on_model[f"epocha_{model_index}"] = metrics_analiz["loss"]
-        PostAnalys(caracts_dt, metrics_analiz)
+    process_anomal_res = {}
+    data = np.array(metrics_analiz["loss"])
 
-    pd_metric_on_model = pd.DataFrame(metric_on_model)
-    pd_metric_on_model.to_csv(results + "prognoses_anomaly.csv", index=False)
+    for idx in range(len(characts_np)):
+        process_name = characts_np[idx]["Events_Charact.Process_Name"]
+        if not process_name in process_anomal_res:
+            process_anomal_res[process_name] = list()
+        process_anomal_res[process_name].append(data[idx])
+
+    anomaly_level_process = {}
+    for process in process_anomal_res:
+        anomaly_level_process[process] = 0
+        for loss in process_anomal_res[process]:
+            if loss >= porog_anomaly:
+                anomaly_level_process[process] += 1
+
+    no_anomaly_level_process = {}
+    for process in process_anomal_res:
+        no_anomaly_level_process[process] = 0
+        for loss in process_anomal_res[process]:
+            if loss < porog_anomaly:
+                no_anomaly_level_process[process] += 1
+
+    print("\nУровень аномальной активности для каждого процесса:")
+    for process in anomaly_level_process:
+        print(f"{process}: {anomaly_level_process[process]}")
+
+    print("\nУровень нормальной активности для каждого процесса:")
+    for process in no_anomaly_level_process:
+        print(f"{process}: {no_anomaly_level_process[process]}")
+
+    mng = plt.get_current_fig_manager()
+    mng.window.showMaximized()
+
+    len_metrix = len(metrics_analiz["loss"])
+    plt.xlim([-5.0, len_metrix + 5])
+    plt.ylim([-0.02, 1.01])
+    plt.title(f"График аномалий в событиях процессов в ОС")
+    plt.grid(which='major')
+    plt.grid(which='minor', linestyle=':')
+
+    plt.plot([porog_anomaly for _ in range(len_metrix)], label="Уровень нормальных данных", color="tab:red")
+    plt.plot(metrics_analiz["loss"], label="Обнаруженные аномалии", color="tab:blue")
+
+    plt.legend(fontsize=10)
+    plt.tight_layout()
+    plt.show()
+
+    # pd_metric_on_model = pd.DataFrame(process_anomal_res)
+    # pd_metric_on_model.to_csv(results + "prognoses_anomaly.csv", index=False)
 
 
 if __name__ == '__main__':
-    main("0.4.7.1_LSTM")
+    main()

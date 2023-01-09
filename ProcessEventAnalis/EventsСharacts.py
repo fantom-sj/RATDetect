@@ -3,410 +3,313 @@
     а также набор характеристик каждого события, необходимых для
     расчёта набора CHARACTERISTIC_EVENTS
 """
+import time
 
 from ipaddress import IPv4Address, AddressValueError
 from ProcmonParser.consts import EventClass
-from statistics import mean, pstdev
+from enum import Enum
 from socket import gethostbyname, gaierror, getservbyname
 
+import numpy as np
+from array import array
 import logging
+from tqdm import tqdm
+
+HUNDREDS_OF_NANOSECONDS = 10000000            # Количество наносекунд в одной секунде
+MIN_SECOND_INACTIVE     = 5                   # Количество секунд прежде чем поток станет считаться неактивным
 
 
-CHARACTERISTIC_EVENTS = [
+class Events_Charact(Enum):
     # Общие сведенья о порции событий
-    "Time_Stamp_Start",      # 0. Временная метка начала порции
-    "Time_Stamp_End",        # 1. Временная метка конца порции
-    "Process_Name",          # 2. Имя процесса
-    "Direction_IP_Port",     # 3. Уникальные направления сетевых инициализаций (IP и порт назначения)
-    "Count_Events_Batch",    # 3. Количество событий в порции
+    Time_Stamp_Start        = 0  # Временная метка начала порции +
+    Time_Stamp_End          = 1  # Временная метка конца порции +
+    Process_Name            = 2  # Имя процесса +
+    Direction_IP_Port       = 3  # Уникальные направления сетевых инициализаций (IP и порт назначения) +
+    Count_Events_Batch      = 4  # Количество событий в порции +
 
-    "Count_Success_Events",  # 4. Количество успешных событий
+    Count_Success_Events    = 5  # Количество успешных событий +
 
     # Количество событий разной класса
-    "Count_Event_Process",      # 5. Количество событий типа Process
-    "Count_Event_Registry",     # 6. Количество событий типа Registry
-    "Count_Event_File_System",  # 7. Количество событий типа File_System
-    "Count_Event_Network",      # 8. Количество событий типа Network
+    Count_Event_Process        = 6  # Количество событий типа Process +
+    Count_Event_Registry       = 7  # Количество событий типа Registry +
+    Count_Event_File_System    = 8  # Количество событий типа File_System +
+    Count_Event_Network        = 9  # Количество событий типа Network +
 
     # Данные по категории событий: чтение и запись данных процессом
-    "Count_event_Read",         # 9.  Количество событий относящихся к категории чтение
-    "Count_event_Read_MetaD",   # 10. Количество событий относящихся к категории чтение метаданных
-    "Count_event_Write",        # 11. Количество событий относящихся к категории записи
-    "Count_event_Write_MetaD",  # 12. Количество событий относящихся к категории записи метаданных
+    Count_event_Read           = 10  # Количество событий относящихся к категории чтение +
+    Count_event_Read_MetaD     = 11  # Количество событий относящихся к категории чтение метаданных +
+    Count_event_Write          = 12  # Количество событий относящихся к категории записи +
+    Count_event_Write_MetaD    = 13  # Количество событий относящихся к категории записи метаданных +
+    Ratio_Read_on_Write        = 14  # Соотношение количества событий на чтения и записи +
 
     # Основные события работы с файловой системой
-    "Count_ReadFile",    # 13. Количество событий на чтение фала
-    "Count_CreateFile",  # 14. Количество событий на создание фала
-    "Count_WriteFile",   # 15. Количество запросов на запись файла
-    "Count_CloseFile",   # 16. Количество запросов на закрытие файла
-
-    # Дополнительные события работы с файловой системой
-    "Count_VolumeDismount",           # 17.
-    "Count_VolumeMount",              # 18.
-    "Count_QueryOpen",                # 19.
-    "Count_CreateFileMapping",        # 20.
-    "Count_CreatePipe",               # 21.
-    "Count_QueryInformationFile",     # 22.
-    "Count_SetInformationFile",       # 23.
-    "Count_QueryEAFile",              # 24.
-    "Count_SetEAFile",                # 25.
-    "Count_FlushBuffersFile",         # 26.
-    "Count_QueryVolumeInformation",   # 27.
-    "Count_SetVolumeInformation",     # 28.
-    "Count_DirectoryControl",         # 29.
-    "Count_FileSystemControl",        # 30.
-    "Count_DeviceIoControl",          # 31.
-    "Count_InternalDeviceIoControl",  # 32.
-    "Count_LockUnlockFile",           # 33.
-    "Count_CreateMailSlot",           # 34.
-    "Count_QuerySecurityFile",        # 35.
-    "Count_SetSecurityFile",          # 36.
-    "Count_SystemControl",            # 37.
-    "Count_DeviceChange",             # 38.
-    "Count_QueryFileQuota",           # 39.
-    "Count_SetFileQuota",             # 40.
-    "Count_PlugAndPlay",              # 41.
-
-    # Количество событий относящихся к файловой системе, и различным подкатегориям взаимодействия с ней
-    "Count_FilesystemQueryVolumeInformationOperation",  # 42.
-    "Count_FilesystemSetVolumeInformationOperation",    # 43.
-    "Count_FilesystemQueryInformationOperation",        # 44.
-    "Count_FilesystemSetInformationOperation",          # 45.
-    "Count_FilesystemDirectoryControlOperation",        # 46.
-    "Count_FilesystemPnpOperation",                     # 47.
+    Count_ReadFile           = 15  # Количество событий на чтение фала +
+    Count_CreateFile         = 16  # Количество событий на создание фала +
+    Count_WriteFile          = 17  # Количество запросов на запись файла +
+    Count_CloseFile          = 18  # Количество запросов на закрытие файла +
+    Ratio_Read_on_Write_File = 19  # Соотношение количество событий чтения и записи файлов +
 
     # Статистические характеристики относящиеся к работе с файловой системой
-    "Count_Unique_Path",     # 48. Количество уникальных путей обращения к файлам
-    "Count_Read_Length",     # 49. Количество считанной с диска информации
-    "Count_Write_Length",    # 50. Количество записанной на диск информации
-    "Max_Read_Length",       # 51. Максимальный объем считанной с диска информации в рамках одного события
-    "Min_Read_Length",       # 52. Минимальный объем считанной с диска информации в рамках одного события
-    "Mean_Read_Length",      # 53. Средний объем считанной с диска информации в рамках одного события
-    "Std_Dev_Read_Length",   # 54. Стандартное отклонение объема считанной с диска информации в рамках одного события
-    "Max_Write_Length",      # 55. Максимальный объем записанной на диск информации в рамках одного события
-    "Min_Write_Length",      # 56. Минимальный объем записанной на диск информации в рамках одного события
-    "Mean_Write_Length",     # 57. Средний объем записанной на диск информации в рамках одного события
-    "Std_Dev_Write_Length",  # 58. Стандартное отклонение объема записанной на диск информации в рамках одного события
+    Count_Unique_Path  = 45  # Количество уникальных путей обращения к файлам +
+    Count_Read_Length  = 46  # Количество считанной с диска информации +
+    Count_Write_Length = 47  # Количество записанной на диск информации +
 
-    # Колличесво обращений к различным ключевым каталогам системы
-    "Appeal_to_system32",      # 59. Количество событий с обращением к каталогу Windows/system32
-    "Appeal_to_ProgramData",   # 60. Количество событий с обращением к каталогу ProgramData
-    "Appeal_to_ProgramFiles",  # 61. Количество событий с обращением к каталогу ProgramFiles
-    "Appeal_to_UserDir",       # 62. Количество событий с обращением к домашнему каталогу текущего пользователя
+    Mean_Read_Length   = 48  # Средний объем считанной с диска информации в рамках одного события +
+    Max_Read_Length    = 49  # Максимальный объем считанной с диска информации в рамках одного события +
+    Min_Read_Length    = 50  # Минимальный объем считанной с диска информации в рамках одного события +
+    Std_Read_Length    = 51  # Стандартное отклонение объема считанной с диска информации в рамках одного события +
 
-    # Количество событий различных событий реестра
-    "Count_Reg_OpenKey",                # 63. Количество событий открытия ключа реестра
-    "Count_Reg_CreateKey",              # 64. Количество событий создания ключа реестра
-    "Count_Reg_CloseKey",               # 65. Количество событий закрытия ключа реестра
-    "Count_Reg_QueryKey",               # 66. Количество запросов ключа реестра
-    "Count_Reg_SetValue",               # 67. Количество событий установки значения ключа реестра
-    "Count_Reg_QueryValue",             # 68. Количество запросов значения ключа реестра
-    "Count_Reg_EnumValue",              # 69. Количество событий перечисления значений реестра
-    "Count_Reg_EnumKey",                # 70. Количество событий перечисления ключей реестра
-    "Count_Reg_SetInfoKey",             # 71. Количество событий установки информационного ключа
-    "Count_Reg_DeleteKey",              # 72. Количество событий удаления ключа реестра
-    "Count_Reg_DeleteValue",            # 73. Количество событий удаления значения ключа реестра
-    "Count_Reg_FlushKey",               # 74. Количество событий установки Flush-ключа реестра
-    "Count_Reg_LoadKey",                # 75. Количество событий загрузки ключа реестра
-    "Count_Reg_UnloadKey",              # 76. Количество событий выгрузки ключа реестра
-    "Count_Reg_RenameKey",              # 77. Количество событий переименования ключа реестра
-    "Count_Reg_QueryMultipleValueKey",  # 78. Количество запросов ключа с несколькими значениями
-    "Count_Reg_SetKeySecurity",         # 79. Количество событий установки ключа безопасности
-    "Count_Reg_QueryKeySecurity",       # 80. Количество запросов ключа безопасности
-    "Count_Unique_Reg_Path",            # 81. Количество уникальных путей обращения к ключам реестра
+    Mean_Write_Length  = 52  # Средний объем записанной на диск информации в рамках одного события +
+    Max_Write_Length   = 53  # Максимальный объем записанной на диск информации в рамках одного события +
+    Min_Write_Length   = 54  # Минимальный объем записанной на диск информации в рамках одного события +
+    Std_Write_Length   = 55  # Стандартное отклонение объема записанной на диск информации в рамках одного события +
+
+    # Скорость чтения / записи и другие временные характеристики
+    Speed_Read_Data          = 56  # Скорость чтения данных +
+    Speed_Write_Data         = 57  # Скорость записи данных +
+
+    Mean_Active_Time_Process = 58  # Среднее время активности процесса +
+    Max_Active_Time_Process  = 59  # Максимальное время активности процесса +
+    Min_Active_Time_Process  = 60  # Минимальное время активности процесса +
+    Std_Active_Time_Process  = 61  # Стандартное отклонение времени активности процесса +
+
+    Mean_InActive_Time_Process = 62  # Среднее время не активности процесса +
+    Max_InActive_Time_Process  = 63  # Максимальное время не активности процесса +
+    Min_InActive_Time_Process  = 64  # Минимальное время не активности процесса +
+    Std_InActive_Time_Process  = 65  # Стандартное отклонение времени не активности процесса +
 
     # Колличесво обращений к различным корневым веткам реестра
-    "Appeal_reg_HKCR",  # 82. Количество обращений в ветке реестра HKCR
-    "Appeal_reg_HKCU",  # 83. Количество обращений в ветке реестра HKCU
-    "Appeal_reg_HKLM",  # 84. Количество обращений в ветке реестра HKLM
-    "Appeal_reg_HKU",   # 85. Количество обращений в ветке реестра HKU
-    "Appeal_reg_HKCC",  # 86. Количество обращений в ветке реестра HKCC
+    Appeal_reg_HKCR    = 85  # Количество обращений в ветке реестра HKCR +
+    Appeal_reg_HKCU    = 86  # Количество обращений в ветке реестра HKCU +
+    Appeal_reg_HKLM    = 87  # Количество обращений в ветке реестра HKLM +
+    Appeal_reg_HKU     = 88  # Количество обращений в ветке реестра HKU +
+    Appeal_reg_HKCC    = 89  # Количество обращений в ветке реестра HKCC +
 
-    # Количество сетевых событий различных типов
-    "Count_Net_Connect",     # 87.  Количество инициированных сетевых соединений
-    "Count_Net_Disconnect",  # 88.  Количество завершённых сетевых соединений
-    "Count_Net_Send",        # 89.  Количество событий отправки информации по сети
-    "Count_Net_Receive",     # 90.  Количество событий получения информации по сети
-    "Count_Net_Accept",      # 91.  Количество событий принятия информации по сети
-    "Count_Net_Reconnect",   # 92.  Количество событий переподключения
-    "Count_Net_Retransmit",  # 93.  Количество событий ретрансляции
-    "Count_Net_TCPCopy",     # 94.  Количество событий TCPCopy
-    "Count_TCP_Events",      # 95.  Количество TCP событий
-    "Count_UDP_Events",      # 96.  Количество UDP событий
+    Count_Unique_Reg_Path = 84  # Количество уникальных путей обращения к ключам реестра +
+
+    # Количество событий UDP и TCP
+    Count_TCP_Events        = 98  # Количество TCP событий +
+    Count_UDP_Events        = 99  # Количество UDP событий +
 
     # Статистические характеристики сетевых событий в рамках порции
-    "Count_Send_Length",          # 97.   Размер отправленной по сети информации
-    "Max_Send_Length",            # 98.   Максимальный размер отправляемой по сети информации в одно событие
-    "Min_Send_Length",            # 99.   Минимальный размер отправляемой по сети информации в одно событие
-    "Mean_Send_Length",           # 100.  Средний размер отправляемой по сети информации в одно событие
-    "Std_Dev_Send_Length",        # 101.  Стандартное отклонение размера отправляемой по сети информации в одно событие
-    "Count_Receive_Length",       # 102.  Размер отправленной по сети информации
-    "Max_Receive_Length",         # 103.  Максимальный размер отправляемой по сети информации в одно событие
-    "Min_Receive_Length",         # 104.  Минимальный размер отправляемой по сети информации в одно событие
-    "Mean_Receive_Length",        # 105.  Средний размер отправляемой по сети информации в одно событие
-    "Std_Dev_Receive_Length",     # 106.  Стандартное отклонение размера отправляемой по сети информации в одно событие
-    "Count_Unique_Recipients",    # 107.  Количество уникальных адресов на которые отправляет данные клиент
-    "Count_Unique_Ports_src",     # 108.  Количество уникальных портов источника
-    "Count_Unique_Ports_dst",     # 109.  Количество уникальных портов назначения
+    Ratio_Connect_on_Disconnect = 100  # Соотношение инициированных и завершенных сетевых соединений +
+    Ratio_Send_on_Receive       = 101  # Соотношение количества событий отправки и получения +
+    Ratio_Send_on_Accept        = 102  # Соотношение количества событий отправки и принятия +
+    Ratio_Receive_on_Accept     = 103  # Соотношение количества событий получения и принятия +
+
+    Count_Send_Length = 104  # Размер отправленной по сети информации +
+    Mean_Send_Length  = 105  # Средний размер отправляемой по сети информации в одно событие +
+    Max_Send_Length   = 106  # Максимальный размер отправляемой по сети информации в одно событие +
+    Min_Send_Length   = 107  # Минимальный размер отправляемой по сети информации в одно событие +
+    Std_Send_Length   = 108  # Стандартное отклонение размера отправляемой по сети информации в одно событие +
+
+    Count_Receive_Length = 109  # Размер отправленной по сети информации +
+    Mean_Receive_Length  = 110  # Средний размер отправляемой по сети информации в одно событие +
+    Max_Receive_Length   = 111  # Максимальный размер отправляемой по сети информации в одно событие +
+    Min_Receive_Length   = 112  # Минимальный размер отправляемой по сети информации в одно событие +
+    Std_Receive_Length   = 113  # Стандартное отклонение размера отправляемой по сети информации в одно событие +
+
+    Count_Unique_Recipients = 114  # Количество уникальных адресов на которые отправляет данные клиент +
+    Count_Unique_Ports_src  = 115  # Количество уникальных портов источника +
+    Count_Unique_Ports_dst  = 116  # Количество уникальных портов назначения +
+    Ratio_src_on_dst_Ports  = 124  # Соотношение количества уникальных портов источника и назначения +
 
     # Количество событий процессов различных типов
-    "Count_Process_Defined",     # 110. Количество событий определения процесса
-    "Count_Thread_Create",       # 111. Количество событий создания потоков
-    "Count_Thread_Exit",         # 112. Количество событий завершения потоков
-    "Count_Load_Image",          # 113. Количество событий загрузки образа
-    "Count_Thread_Profile",      # 114. Количество событий профилирования потока
-    "Count_Process_Start",       # 115. Количество событий запуска процесса
+    Count_Process_Defined       = 117  # Количество событий определения процесса
+    Count_Thread_Create         = 118  # Количество событий создания потоков
+    Count_Thread_Exit           = 119  # Количество событий завершения потоков
+    Count_Load_Image            = 120  # Количество событий загрузки образа
+    Count_Thread_Profile        = 121  # Количество событий профилирования потока
+    Count_Process_Start         = 122  # Количество событий запуска процесса
 
-    # Различные соотношения
-    # "Ratio_Files_on_Reg_Events",  # 9.  Соотношение количества событий файловой системы по отношению к реестру
-    # "Ratio_Files_on_Net_Events",  # 10. Соотношение количества событий файловой системы по отношению к сети
-    # "Ratio_Reg_on_Net_Events",  # 11. Соотношение количества событий реестра по отношению к сети
-    # "Ratio_Read_on_Write",  # 16. Соотношение событий чтения к событиям записи данных
-    # "Ratio_Read_on_Write_MD",  # 17. Соотношение событий чтения к событиям записи мета данных
-    # "Ratio_TCP_on_UDP",      # 103. Соотношение количества TCP событий к UDP
-    # "Ratio_Unq_prt_src_on_dst",  # 117.  Соотношение уникальных портов источника к портам назначения
-]
+    Duration = 123  # Длительность порции событий +
 
-FilesystemQueryVolumeInformationOperation = [
-    "QueryInformationVolume",
-    "QueryLabelInformationVolume",
-    "QuerySizeInformationVolume",
-    "QueryDeviceInformationVolume",
-    "QueryAttributeInformationVolume",
-    "QueryControlInformationVolume",
-    "QueryFullSizeInformationVolume",
-    "QueryObjectIdInformationVolume"
-]
 
-FilesystemSetVolumeInformationOperation = [
-    "SetControlInformationVolume",
-    "SetLabelInformationVolume",
-    "SetObjectIdInformationVolume"
-]
+class OperationName(Enum):
+    # Количество различных операций с файловой системой
+    VolumeDismount             = 20  # +
+    VolumeMount                = 21  # +
+    QueryOpen                  = 22  # +
+    CreateFileMapping          = 23  # +
+    CreatePipe                 = 24  # +
+    QueryInformationFile       = 25  # +
+    SetInformationFile         = 26  # +
+    QueryEAFile                = 27  # +
+    SetEAFile                  = 28  # +
+    FlushBuffersFile           = 29  # +
+    QueryVolumeInformation     = 30  # +
+    SetVolumeInformation       = 31  # +
+    DirectoryControl           = 32  # +
+    FileSystemControl          = 33  # +
+    DeviceIoControl            = 34  # +
+    InternalDeviceIoControl    = 35  # +
+    LockUnlockFile             = 36  # +
+    CreateMailSlot             = 37  # +
+    QuerySecurityFile          = 38  # +
+    SetSecurityFile            = 39  # +
+    SystemControl              = 40  # +
+    DeviceChange               = 41  # +
+    QueryFileQuota             = 42  # +
+    SetFileQuota               = 43  # +
+    PlugAndPlay                = 44  # +
 
-FilesystemQueryInformationOperation = [
-    "QueryBasicInformationFile",
-    "QueryStandardInformationFile",
-    "QueryFileInternalInformationFile",
-    "QueryEaInformationFile",
-    "QueryNameInformationFile",
-    "QueryPositionInformationFile",
-    "QueryAllInformationFile",
-    "QueryEndOfFile",
-    "QueryStreamInformationFile",
-    "QueryCompressionInformationFile",
-    "QueryId",
-    "QueryMoveClusterInformationFile",
-    "QueryNetworkOpenInformationFile",
-    "QueryAttributeTagFile",
-    "QueryIdBothDirectory",
-    "QueryValidDataLength",
-    "QueryShortNameInformationFile",
-    "QueryIoPiorityHint",
-    "QueryLinks",
-    "QueryNormalizedNameInformationFile",
-    "QueryNetworkPhysicalNameInformationFile",
-    "QueryIdGlobalTxDirectoryInformation",
-    "QueryIsRemoteDeviceInformation",
-    "QueryAttributeCacheInformation",
-    "QueryNumaNodeInformation",
-    "QueryStandardLinkInformation",
-    "QueryRemoteProtocolInformation",
-    "QueryRenameInformationBypassAccessCheck",
-    "QueryLinkInformationBypassAccessCheck",
-    "QueryVolumeNameInformation",
-    "QueryIdInformation",
-    "QueryIdExtdDirectoryInformation",
-    "QueryHardLinkFullIdInformation",
-    "QueryIdExtdBothDirectoryInformation",
-    "QueryDesiredStorageClassInformation",
-    "QueryStatInformation",
-    "QueryMemoryPartitionInformation",
-    "QuerySatLxInformation",
-    "QueryCaseSensitiveInformation",
-    "QueryLinkInformationEx",
-    "QueryLinkInfomraitonBypassAccessCheck",
-    "QueryStorageReservedIdInformation",
-    "QueryCaseSensitiveInformationForceAccessCheck"
-]
+    # Количество различных операций с реестром
+    OpenKey                  = 66  # Количество событий открытия ключа реестра +
+    CreateKey                = 67  # Количество событий создания ключа реестра +
+    CloseKey                 = 68  # Количество событий закрытия ключа реестра +
+    QueryKey                 = 69  # Количество запросов ключа реестра +
+    SetValue                 = 70  # Количество событий установки значения ключа реестра +
+    QueryValue               = 71  # Количество запросов значения ключа реестра +
+    EnumValue                = 72  # Количество событий перечисления значений реестра +
+    EnumKey                  = 73  # Количество событий перечисления ключей реестра +
+    SetInfoKey               = 74  # Количество событий установки информационного ключа +
+    DeleteKey                = 75  # Количество событий удаления ключа реестра +
+    DeleteValue              = 76  # Количество событий удаления значения ключа реестра ++
+    FlushKey                 = 77  # Количество событий установки Flush-ключа реестра +
+    LoadKey                  = 78  # Количество событий загрузки ключа реестра +
+    UnloadKey                = 79  # Количество событий выгрузки ключа реестра +
+    RenameKey                = 80  # Количество событий переименования ключа реестра +
+    QueryMultipleValueKey    = 81  # Количество запросов ключа с несколькими значениями +
+    SetKeySecurity           = 82  # Количество событий установки ключа безопасности +
+    QueryKeySecurity         = 83  # Количество запросов ключа безопасности +
 
-FilesystemSetInformationOperation = [
-    "SetBasicInformationFile",
-    "SetRenameInformationFile",
-    "SetLinkInformationFile",
-    "SetDispositionInformationFile",
-    "SetPositionInformationFile",
-    "SetAllocationInformationFile",
-    "SetEndOfFileInformationFile",
-    "SetFileStreamInformation",
-    "SetPipeInformation",
-    "SetValidDataLengthInformationFile",
-    "SetShortNameInformation",
-    "SetReplaceCompletionInformation",
-    "SetDispositionInformationEx",
-    "SetRenameInformationEx",
-    "SetRenameInformationExBypassAccessCheck",
-    "SetStorageReservedIdInformation"
-]
+    # Количество различных операций с реестром
+    Connect       = 90  # Количество инициированных сетевых соединений +
+    Disconnect    = 91  # Количество завершённых сетевых соединений +
+    Send          = 92  # Количество событий отправки информации по сети +
+    Receive       = 93  # Количество событий получения информации по сети +
+    Accept        = 94  # Количество событий принятия информации по сети +
+    Reconnect     = 95  # Количество событий переподключения +
+    Retransmit    = 96  # Количество событий ретрансляции +
+    TCPCopy       = 97  # Количество событий TCPCopy +
 
-FilesystemDirectoryControlOperation = [
-    "QueryDirectory",
-    "NotifyChangeDirectory"
-]
 
-FilesystemPnpOperation = [
-    "StartDevice",
-    "QueryRemoveDevice",
-    "RemoveDevice",
-    "CancelRemoveDevice",
-    "StopDevice",
-    "QueryStopDevice",
-    "CancelStopDevice",
-    "QueryDeviceRelations",
-    "QueryInterface",
-    "QueryCapabilities",
-    "QueryResources",
-    "QueryResourceRequirements",
-    "QueryDeviceText",
-    "FilterResourceRequirements",
-    "ReadConfig",
-    "WriteConfig",
-    "Eject",
-    "SetLock",
-    "QueryId2",
-    "QueryPnpDeviceState",
-    "QueryBusInformation",
-    "DeviceUsageNotification",
-    "SurpriseRemoval",
-    "QueryLegacyBusInformation"
+Event_Charact = [
+    "Date & Time",
+    "Process Name",
+    "Result",
+    "Category",
+    "Operation",
+    "Event Class",
+    "Path",
+    "Detail"
 ]
 
 
 def CulcCharactsEventsOnWindow(events, user_dir):
     characts = {}
-    for ch in CHARACTERISTIC_EVENTS:
-        characts[ch] = 0
+    for ch_name in Events_Charact:
+        characts[ch_name] = 0
 
-    characts["Time_Stamp_Start"]    = events[0]["Date & Time"]
-    characts["Time_Stamp_End"]      = events[-1]["Date & Time"]
-    characts["Process_Name"]        = events[-1]["Process Name"]
-    characts["Direction_IP_Port"]   = None
-    characts["Count_Events_Batch"]  = len(events)
+    for operation_name in OperationName:
+        characts[operation_name] = 0
 
-    Arr_Unique_Path             = []
-    Arr_Read_Length             = []
-    Arr_Write_Length            = []
+    characts[Events_Charact.Time_Stamp_Start]    = events[0]["Date & Time"]
+    characts[Events_Charact.Time_Stamp_End]      = events[-1]["Date & Time"]
+    characts[Events_Charact.Process_Name]        = events[-1]["Process Name"]
+    characts[Events_Charact.Direction_IP_Port]   = None
+    characts[Events_Charact.Count_Events_Batch]  = len(events)
+    characts[Events_Charact.Duration]            = events[-1]["Date & Time"] - events[0]["Date & Time"]
 
-    Arr_Unique_Reg_Path         = []
-    Arr_Unique_Recipients       = []
-    Arr_Unique_Ports_src        = []
-    Arr_Unique_Ports_dst        = []
+    Arr_Unique_Path             = {}
+    Arr_Read_Length             = array("f")
+    Arr_Write_Length            = array("f")
 
-    Arr_Send_Length             = []
-    Arr_Receive_Length          = []
+    Arr_Unique_Reg_Path         = {}
+    Arr_Unique_Recipients       = {}
+    Arr_Unique_Ports_src        = {}
+    Arr_Unique_Ports_dst        = {}
 
+    Arr_Send_Length             = array("f")
+    Arr_Receive_Length          = array("f")
+    arr_time_active             = array("Q")
+    arr_time_inactive           = array("Q")
+
+    start_active = events[0]["Date & Time"]
+
+    # bar = tqdm(total=len(events), desc="Выделение характеристик из событий")
     for i in range(len(events)):
+        # bar.update(1)
         try:
+            if i > 0:
+                timeout_inactive = events[i]["Date & Time"] - events[i-1]["Date & Time"]
+                if timeout_inactive >= (HUNDREDS_OF_NANOSECONDS * MIN_SECOND_INACTIVE):
+                    arr_time_inactive.append(timeout_inactive)
+                    arr_time_active.append(events[i-1]["Date & Time"] - start_active)
+                    start_active = events[i]["Date & Time"]
+
             if events[i]["Result"] == 0:
-                characts["Count_Success_Events"] += 1
+                characts[Events_Charact.Count_Success_Events] += 1
 
             if "Read" in events[i]["Category"]:
                 if "Meta" in events[i]["Category"]:
-                    characts["Count_event_Read_MetaD"] += 1
+                    characts[Events_Charact.Count_event_Read_MetaD] += 1
                 else:
-                    characts["Count_event_Read"] += 1
+                    characts[Events_Charact.Count_event_Read] += 1
             elif "Write" in events[i]["Category"]:
                 if "Meta" in events[i]["Category"]:
-                    characts["Count_event_Write_MetaD"] += 1
+                    characts[Events_Charact.Count_event_Write_MetaD] += 1
                 else:
-                    characts["Count_event_Write"] += 1
+                    characts[Events_Charact.Count_event_Write] += 1
+
+            for operation_name in OperationName:
+                if operation_name.name in events[i]["Operation"]:
+                    characts[operation_name] += 1
 
             if events[i]["Event Class"] == EventClass.Process:
-                characts["Count_Event_Process"] += 1
+                characts[Events_Charact.Count_Event_Process] += 1
 
                 if "Defined" in events[i]["Operation"]:
-                    characts["Count_Process_Defined"] += 1
+                    characts[Events_Charact.Count_Process_Defined] += 1
                 elif "Create" in events[i]["Operation"]:
-                    characts["Count_Thread_Create"] += 1
+                    characts[Events_Charact.Count_Thread_Create] += 1
                 elif "Exit" in events[i]["Operation"]:
-                    characts["Count_Thread_Exit"] += 1
+                    characts[Events_Charact.Count_Thread_Exit] += 1
                 elif "Image" in events[i]["Operation"]:
-                    characts["Count_Load_Image"] += 1
+                    characts[Events_Charact.Count_Load_Image] += 1
                 elif "Profile" in events[i]["Operation"]:
-                    characts["Count_Thread_Profile"] += 1
+                    characts[Events_Charact.Count_Thread_Profile] += 1
                 elif "Start" in events[i]["Operation"]:
-                    characts["Count_Process_Start"] += 1
-                elif "Statistics" in events[i]["Operation"]:
-                    characts["Count_System_Statistics"] += 1
+                    characts[Events_Charact.Count_Process_Start] += 1
 
             elif events[i]["Event Class"] == EventClass.Registry:
-                characts["Count_Event_Registry"] += 1
+                characts[Events_Charact.Count_Event_Registry] += 1
 
                 if not events[i]["Path"] in Arr_Unique_Reg_Path:
-                    Arr_Unique_Reg_Path.append(events[i]["Path"])
-
-                for ch in CHARACTERISTIC_EVENTS[69:87]:
-                    if ch[10:] in events[i]["Operation"]:
-                        characts[ch] += 1
+                    Arr_Unique_Reg_Path[events[i]["Path"]] = events[i]["Path"]
 
                 if "HKCR" in events[i]["Path"]:
-                    characts["Appeal_reg_HKCR"] += 1
+                    characts[Events_Charact.Appeal_reg_HKCR] += 1
                 elif "HKCU" in events[i]["Path"]:
-                    characts["Appeal_reg_HKCU"] += 1
+                    characts[Events_Charact.Appeal_reg_HKCU] += 1
                 elif "HKLM" in events[i]["Path"]:
-                    characts["Appeal_reg_HKLM"] += 1
+                    characts[Events_Charact.Appeal_reg_HKLM] += 1
                 elif "HKU" in events[i]["Path"]:
-                    characts["Appeal_reg_HKU"] += 1
+                    characts[Events_Charact.Appeal_reg_HKU] += 1
                 elif "HKCC" in events[i]["Path"]:
-                    characts["Appeal_reg_HKCC"] += 1
+                    characts[Events_Charact.Appeal_reg_HKCC] += 1
 
             elif events[i]["Event Class"] == EventClass.File_System:
-                characts["Count_Event_File_System"] += 1
+                characts[Events_Charact.Count_Event_File_System] += 1
 
                 if not events[i]["Path"] in Arr_Unique_Path:
-                    Arr_Unique_Path.append(events[i]["Path"])
+                    Arr_Unique_Path[events[i]["Path"]] = events[i]["Path"]
 
                 if "Read" in events[i]["Operation"]:
-                    characts["Count_ReadFile"] += 1
+                    characts[Events_Charact.Count_ReadFile] += 1
                     if "Length" in events[i]["Detail"]:
                         Arr_Read_Length.append(float(str(events[i]["Detail"]["Length"]).replace(",", "")))
                 elif "Create" in events[i]["Operation"]:
-                    characts["Count_CreateFile"] += 1
+                    characts[Events_Charact.Count_CreateFile] += 1
                 elif "Write" in events[i]["Operation"]:
-                    characts["Count_WriteFile"] += 1
+                    characts[Events_Charact.Count_WriteFile] += 1
                     if "Length" in events[i]["Detail"]:
                         Arr_Write_Length.append(float(str(events[i]["Detail"]["Length"]).replace(",", "")))
                 elif "Close" in events[i]["Operation"]:
-                    characts["Count_CloseFile"] += 1
-
-                for ch in CHARACTERISTIC_EVENTS[22:48]:
-                    if ch[6:] in events[i]["Operation"]:
-                        characts[ch] += 1
-
-                if events[i]["Operation"] in FilesystemQueryVolumeInformationOperation:
-                    characts["Count_FilesystemQueryVolumeInformationOperation"] += 1
-                elif events[i]["Operation"] in FilesystemSetVolumeInformationOperation:
-                    characts["Count_FilesystemSetVolumeInformationOperation"] += 1
-                elif events[i]["Operation"] in FilesystemQueryInformationOperation:
-                    characts["Count_FilesystemQueryInformationOperation"] += 1
-                elif events[i]["Operation"] in FilesystemSetInformationOperation:
-                    characts["Count_FilesystemSetInformationOperation"] += 1
-                elif events[i]["Operation"] in FilesystemDirectoryControlOperation:
-                    characts["Count_FilesystemDirectoryControlOperation"] += 1
-                elif events[i]["Operation"] in FilesystemPnpOperation:
-                    characts["Count_FilesystemPnpOperation"] += 1
-
-                if "Windows\\System32" in events[i]["Path"]:
-                    characts["Appeal_to_system32"] += 1
-                elif "ProgramData" in events[i]["Path"]:
-                    characts["Appeal_to_ProgramData"] += 1
-                elif "Program Files" in events[i]["Path"]:
-                    characts["Appeal_to_ProgramFiles"] += 1
-                elif user_dir in events[i]["Path"]:
-                    characts["Appeal_to_UserDir"] += 1
+                    characts[Events_Charact.Count_CloseFile] += 1
 
             elif events[i]["Event Class"] == EventClass.Network:
-                characts["Count_Event_Network"] += 1
+                characts[Events_Charact.Count_Event_Network] += 1
 
                 src_dst = str(events[i]["Path"]).split(" -> ")
                 if len(src_dst) == 2:
@@ -414,21 +317,22 @@ def CulcCharactsEventsOnWindow(events, user_dir):
                     if idx_spr_port_src != -1:
                         port_src = src_dst[0][idx_spr_port_src+1:]
                         if not port_src in Arr_Unique_Ports_src:
-                            Arr_Unique_Ports_src.append(port_src)
+                            Arr_Unique_Ports_src[port_src] = port_src
 
                     idx_spr_ip_dst = str(src_dst[1]).rfind(":")
                     if idx_spr_ip_dst != -1:
-                        direction_chek = False
+                        direction_check = False
 
                         ip_dst_str = src_dst[1][:idx_spr_ip_dst]
                         try:
-                            ip_dst = str(IPv4Address(ip_dst_str))
-                            direction_chek = True
+
+                            ip_dst = IPv4Address(ip_dst_str)
+                            direction_check = True
                         except AddressValueError as err:
                             # logging.exception(err)
                             try:
                                 ip_dst = gethostbyname(ip_dst_str)
-                                direction_chek = True
+                                direction_check = True
                             except gaierror as err2:
                                 ip_dst = ip_dst_str
                                 # logging.exception(err2)
@@ -439,33 +343,29 @@ def CulcCharactsEventsOnWindow(events, user_dir):
                             port_dst = int(port_dst_str)
                         except ValueError:
                             try:
-                                if "TCP" in events[i]["Operation"]:
-                                    port_dst = getservbyname(port_dst_str, "tcp")
-                                elif "UDP" in events[i]["Operation"]:
+                                if "UDP" in events[i]["Operation"]:
                                     port_dst = getservbyname(port_dst_str, "udp")
+                                elif "TCP" in events[i]["Operation"]:
+                                    port_dst = getservbyname(port_dst_str, "tcp")
                             except OSError:
                                 port_dst = port_dst_str
 
-                        if direction_chek:
-                            direction = ip_dst + ":" + str(port_dst)
-                            if characts["Direction_IP_Port"] is None:
-                                characts["Direction_IP_Port"] = direction
-                            elif not direction in characts["Direction_IP_Port"]:
-                                characts["Direction_IP_Port"] += (";" + direction)
+                        if direction_check:
+                            direction = str(ip_dst) + ":" + str(port_dst)
+                            if characts[Events_Charact.Direction_IP_Port] is None:
+                                characts[Events_Charact.Direction_IP_Port] = direction
+                            elif not direction in characts[Events_Charact.Direction_IP_Port]:
+                                characts[Events_Charact.Direction_IP_Port] += (";" + direction)
 
                         if not ip_dst in Arr_Unique_Recipients:
-                            Arr_Unique_Recipients.append(ip_dst)
+                            Arr_Unique_Recipients[ip_dst] = ip_dst
                         if not port_dst in Arr_Unique_Ports_dst:
-                            Arr_Unique_Ports_dst.append(port_dst)
+                            Arr_Unique_Ports_dst[port_dst] = port_dst
 
-                for ch in CHARACTERISTIC_EVENTS[93:101]:
-                    if ch[10:] in events[i]["Operation"]:
-                        characts[ch] += 1
-
-                if "TCP" in events[i]["Operation"]:
-                    characts["Count_TCP_Events"] += 1
-                elif "UDP" in events[i]["Operation"]:
-                    characts["Count_UDP_Events"] += 1
+                if "UDP" in events[i]["Operation"]:
+                    characts[Events_Charact.Count_UDP_Events] += 1
+                elif "TCP" in events[i]["Operation"]:
+                    characts[Events_Charact.Count_TCP_Events] += 1
 
                 if "Length" in events[i]["Detail"]:
                     if "Send" in events[i]["Operation"]:
@@ -476,34 +376,159 @@ def CulcCharactsEventsOnWindow(events, user_dir):
         except:
             continue
 
-    characts["Count_Unique_Path"]       = len(Arr_Unique_Path)
-    characts["Count_Unique_Reg_Path"]   = len(Arr_Unique_Reg_Path)
-    characts["Count_Unique_Recipients"] = len(Arr_Unique_Recipients)
-    characts["Count_Unique_Ports_src"]  = len(Arr_Unique_Ports_src)
-    characts["Count_Unique_Ports_dst"]  = len(Arr_Unique_Ports_dst)
+    # bar.close()
 
-    characts["Max_Read_Length"]         = max(Arr_Read_Length) if len(Arr_Read_Length) > 0 else 0
-    characts["Min_Read_Length"]         = min(Arr_Read_Length) if len(Arr_Read_Length) > 0 else 0
-    characts["Mean_Read_Length"]        = mean(Arr_Read_Length) if len(Arr_Read_Length) > 0 else 0
-    characts["Std_Dev_Read_Length"]     = pstdev(Arr_Read_Length) if len(Arr_Read_Length) > 0 else 0
-    characts["Max_Write_Length"]        = max(Arr_Write_Length) if len(Arr_Write_Length) > 0 else 0
-    characts["Min_Write_Length"]        = min(Arr_Write_Length) if len(Arr_Write_Length) > 0 else 0
-    characts["Mean_Write_Length"]       = mean(Arr_Write_Length) if len(Arr_Write_Length) > 0 else 0
-    characts["Std_Dev_Write_Length"]    = pstdev(Arr_Write_Length) if len(Arr_Write_Length) > 0 else 0
+    if characts[Events_Charact.Count_event_Write] != 0:
+        characts[Events_Charact.Ratio_Read_on_Write] = characts[Events_Charact.Count_event_Read] / \
+                                                         characts[Events_Charact.Count_event_Write]
+    else:
+        characts[Events_Charact.Ratio_Read_on_Write] = np.inf
 
-    characts["Count_Send_Length"]       = sum(Arr_Send_Length) if len(Arr_Send_Length) > 0 else 0
-    characts["Max_Send_Length"]         = max(Arr_Send_Length) if len(Arr_Send_Length) > 0 else 0
-    characts["Min_Send_Length"]         = min(Arr_Send_Length) if len(Arr_Send_Length) > 0 else 0
-    characts["Mean_Send_Length"]        = mean(Arr_Send_Length) if len(Arr_Send_Length) > 0 else 0
-    characts["Std_Dev_Send_Length"]     = pstdev(Arr_Send_Length) if len(Arr_Send_Length) > 0 else 0
-    characts["Count_Receive_Length"]    = sum(Arr_Receive_Length) if len(Arr_Receive_Length) > 0 else 0
-    characts["Max_Receive_Length"]      = max(Arr_Receive_Length) if len(Arr_Receive_Length) > 0 else 0
-    characts["Min_Receive_Length"]      = min(Arr_Receive_Length) if len(Arr_Receive_Length) > 0 else 0
-    characts["Mean_Receive_Length"]     = mean(Arr_Receive_Length) if len(Arr_Receive_Length) > 0 else 0
-    characts["Std_Dev_Receive_Length"]  = pstdev(Arr_Receive_Length) if len(Arr_Receive_Length) > 0 else 0
+    if characts[Events_Charact.Count_WriteFile] != 0:
+        characts[Events_Charact.Ratio_Read_on_Write_File] = characts[Events_Charact.Count_ReadFile] / \
+                                                            characts[Events_Charact.Count_WriteFile]
+    else:
+        characts[Events_Charact.Ratio_Read_on_Write_File] = np.inf
+
+    if characts[OperationName.Disconnect] != 0:
+        characts[Events_Charact.Ratio_Connect_on_Disconnect] = characts[OperationName.Connect] / \
+                                                               characts[OperationName.Disconnect]
+    else:
+        characts[Events_Charact.Ratio_Connect_on_Disconnect] = np.inf
+
+    if characts[OperationName.Receive] != 0:
+        characts[Events_Charact.Ratio_Send_on_Receive] = characts[OperationName.Send] / \
+                                                         characts[OperationName.Receive]
+    else:
+        characts[Events_Charact.Ratio_Send_on_Receive] = np.inf
+
+    if characts[OperationName.Accept] != 0:
+        characts[Events_Charact.Ratio_Send_on_Accept] = characts[OperationName.Send] / \
+                                                        characts[OperationName.Accept]
+    else:
+        characts[Events_Charact.Ratio_Send_on_Accept] = np.inf
+
+    if characts[OperationName.Accept] != 0:
+        characts[Events_Charact.Ratio_Receive_on_Accept] = characts[OperationName.Receive] / \
+                                                           characts[OperationName.Accept]
+    else:
+        characts[Events_Charact.Ratio_Receive_on_Accept] = np.inf
+
+    characts[Events_Charact.Count_Unique_Path]  = len(Arr_Unique_Path)
+
+    if characts[Events_Charact.Duration] != 0:
+        characts[Events_Charact.Speed_Read_Data]  = characts[Events_Charact.Count_Read_Length] / \
+                                                    characts[Events_Charact.Duration]
+        characts[Events_Charact.Speed_Write_Data]  = characts[Events_Charact.Count_Write_Length] / \
+                                                    characts[Events_Charact.Duration]
+    else:
+        characts[Events_Charact.Speed_Read_Data]  = np.inf
+        characts[Events_Charact.Speed_Write_Data] = np.inf
+
+    characts[Events_Charact.Count_Unique_Reg_Path]   = len(Arr_Unique_Reg_Path)
+    characts[Events_Charact.Count_Unique_Recipients] = len(Arr_Unique_Recipients)
+    characts[Events_Charact.Count_Unique_Ports_src]  = len(Arr_Unique_Ports_src)
+    characts[Events_Charact.Count_Unique_Ports_dst]  = len(Arr_Unique_Ports_dst)
+
+    if characts[Events_Charact.Count_Unique_Ports_dst] != 0:
+        characts[Events_Charact.Ratio_src_on_dst_Ports] = characts[Events_Charact.Count_Unique_Ports_src] / \
+                                                          characts[Events_Charact.Count_Unique_Ports_dst]
+    else:
+        characts[Events_Charact.Ratio_src_on_dst_Ports] = 0
+
+    if len(Arr_Read_Length) == 0:
+        characts[Events_Charact.Count_Read_Length] = 0
+        characts[Events_Charact.Mean_Read_Length]  = 0
+        characts[Events_Charact.Max_Read_Length]   = 0
+        characts[Events_Charact.Min_Read_Length]   = 0
+        characts[Events_Charact.Std_Read_Length]   = 0
+    else:
+        characts[Events_Charact.Count_Read_Length] = np.sum(Arr_Read_Length)
+        characts[Events_Charact.Mean_Read_Length]  = np.mean(Arr_Read_Length)
+        characts[Events_Charact.Max_Read_Length]   = np.max(Arr_Read_Length)
+        characts[Events_Charact.Min_Read_Length]   = np.min(Arr_Read_Length)
+        characts[Events_Charact.Std_Read_Length]   = np.std(Arr_Read_Length)
+
+    if len(Arr_Write_Length) == 0:
+        characts[Events_Charact.Count_Write_Length] = 0
+        characts[Events_Charact.Mean_Write_Length]  = 0
+        characts[Events_Charact.Max_Write_Length]   = 0
+        characts[Events_Charact.Min_Write_Length]   = 0
+        characts[Events_Charact.Std_Write_Length]   = 0
+    else:
+        characts[Events_Charact.Count_Write_Length] = np.sum(Arr_Write_Length)
+        characts[Events_Charact.Mean_Write_Length]  = np.mean(Arr_Write_Length)
+        characts[Events_Charact.Max_Write_Length]   = np.max(Arr_Write_Length)
+        characts[Events_Charact.Min_Write_Length]   = np.min(Arr_Write_Length)
+        characts[Events_Charact.Std_Write_Length]   = np.std(Arr_Write_Length)
+
+    if len(Arr_Send_Length) == 0:
+        characts[Events_Charact.Count_Send_Length] = 0
+        characts[Events_Charact.Mean_Send_Length]  = 0
+        characts[Events_Charact.Max_Send_Length]   = 0
+        characts[Events_Charact.Min_Send_Length]   = 0
+        characts[Events_Charact.Std_Send_Length]   = 0
+    else:
+        characts[Events_Charact.Count_Send_Length] = np.sum(Arr_Send_Length)
+        characts[Events_Charact.Mean_Send_Length]  = np.mean(Arr_Send_Length)
+        characts[Events_Charact.Max_Send_Length]   = np.max(Arr_Send_Length)
+        characts[Events_Charact.Min_Send_Length]   = np.min(Arr_Send_Length)
+        characts[Events_Charact.Std_Send_Length]   = np.std(Arr_Send_Length)
+
+    if len(Arr_Receive_Length) == 0:
+        characts[Events_Charact.Count_Receive_Length] = 0
+        characts[Events_Charact.Mean_Receive_Length]  = 0
+        characts[Events_Charact.Max_Receive_Length]   = 0
+        characts[Events_Charact.Min_Receive_Length]   = 0
+        characts[Events_Charact.Std_Receive_Length]   = 0
+    else:
+        characts[Events_Charact.Count_Receive_Length] = np.sum(Arr_Receive_Length)
+        characts[Events_Charact.Mean_Receive_Length]  = np.mean(Arr_Receive_Length)
+        characts[Events_Charact.Max_Receive_Length]   = np.max(Arr_Receive_Length)
+        characts[Events_Charact.Min_Receive_Length]   = np.min(Arr_Receive_Length)
+        characts[Events_Charact.Std_Receive_Length]   = np.std(Arr_Receive_Length)
+
+    if len(arr_time_active) == 0:
+        characts[Events_Charact.Mean_Active_Time_Process] = 0
+        characts[Events_Charact.Min_Active_Time_Process]  = 0
+        characts[Events_Charact.Max_Active_Time_Process]  = 0
+        characts[Events_Charact.Std_Active_Time_Process]  = 0
+    else:
+        characts[Events_Charact.Mean_Active_Time_Process] = np.mean(arr_time_active)
+        characts[Events_Charact.Min_Active_Time_Process]  = np.min(arr_time_active)
+        characts[Events_Charact.Max_Active_Time_Process]  = np.max(arr_time_active)
+        characts[Events_Charact.Std_Active_Time_Process]  = np.std(arr_time_active)
+
+    if len(arr_time_inactive) == 0:
+        characts[Events_Charact.Mean_InActive_Time_Process] = 0
+        characts[Events_Charact.Min_InActive_Time_Process]  = 0
+        characts[Events_Charact.Max_InActive_Time_Process]  = 0
+        characts[Events_Charact.Std_InActive_Time_Process]  = 0
+    else:
+        characts[Events_Charact.Mean_InActive_Time_Process] = np.mean(arr_time_inactive)
+        characts[Events_Charact.Min_InActive_Time_Process]  = np.min(arr_time_inactive)
+        characts[Events_Charact.Max_InActive_Time_Process]  = np.max(arr_time_inactive)
+        characts[Events_Charact.Std_InActive_Time_Process]  = np.std(arr_time_inactive)
 
     return characts
 
 
 if __name__ == '__main__':
-    print(len(CHARACTERISTIC_EVENTS) - 4)
+    from timeit import timeit
+    from PMLParser import ParserEvents
+    import pandas as pd
+
+    pml_file_name = "F:\\EVENT\\train_events.PML"
+    user_dir = "Жертва"
+    parser_pml = ParserEvents(pml_file_name, True)
+    events = parser_pml.GetEvents()
+
+    timeBool = timeit("""
+CulcCharactsEventsOnWindow(events, user_dir)
+    """, globals=locals(), number=1)
+    print(timeBool)
+
+    characts = CulcCharactsEventsOnWindow(events, user_dir)
+    print(characts)
+    characts = pd.DataFrame([characts])
+    print(characts)

@@ -1,6 +1,7 @@
 from AnomalyDetector.AutoEncoder_RNN import TrainingDatasetGen
 from AuxiliaryFunctions import GetFilesCSV
 from ProcessEventAnalis.AnalysisProcessEvents import AnalyzerEvents
+from ProcessEventAnalis.EventsСharacts import Events_Charact
 from tensorflow import keras
 from keras import Model
 
@@ -12,134 +13,139 @@ import tensorflow as tf
 import pandas as pd
 import numpy as np
 import logging
+import pickle
+import socket
+import struct
 import math
 import time
+import copy
+import ssl
 import sys
+
+
+def receive_data(connection):
+    data_size = struct.unpack('>I', connection.recv(4))[0]
+    received_payload = b""
+    reamining_payload_size = data_size
+    while reamining_payload_size != 0:
+        received_payload += connection.recv(reamining_payload_size)
+        reamining_payload_size = data_size - len(received_payload)
+    return pickle.loads(received_payload)
 
 
 class EventAnalyser(Thread):
     def __init__(self, buffer: list, NetEvent: Model,
-                 path_event_analysis: str):
+                 protected_devices: dict):
         super().__init__()
 
         # Параметры анализатора событий
         self.log_file            = "LogStdOut.txt"
         self.err_file            = "LogStdErr.txt"
         self.NetEvent            = NetEvent
-        self.path_event_analysis = path_event_analysis
+        self.protected_devices   = protected_devices
         self.buffer              = buffer
 
         # Параметры анализа с помощью нейросети
-        self.batch_size = 1
-        self.window_size = 1
-        self.loss_func = keras.losses.mse
-        self.max_min_file = "AnomalyDetector\\modeles\\EventAnomalyDetector\\0.4.7.1_LSTM\\M&M_event.csv"
-        self.feature_range = (-1, 1)
+        self.batch_size     = 1
+        self.window_size    = 1
+        self.loss_func      = keras.losses.mse
+        self.max_min_file   = "AnomalyDetector\\modeles\\EventAnomalyDetector\\0.6.0\\M&M_event.csv"
+        self.feature_range  = (-1, 1)
+
+        self.context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        self.context.load_cert_chain(certfile="certificates\\server.crt", keyfile="certificates\\server.key")
+
+        self.characts           = dict()
+        self.threads_collector  = dict()
 
     def NeiroAnalyze(self, characts):
-        caracts_pd = characts.drop(["Time_Stamp_Start"], axis=1)
-        caracts_pd = caracts_pd.drop(["Time_Stamp_End"], axis=1)
-        caracts_pd = caracts_pd.drop(["Process_Name"], axis=1)
-        caracts_pd = caracts_pd.drop(["Direction_IP_Port"], axis=1)
-        caracts_pd = caracts_pd.drop(["Count_Events_Batch"], axis=1)
-        if "Count_System_Statistics" in caracts_pd.columns:
-            caracts_pd = caracts_pd.drop(["Count_System_Statistics"], axis=1)
-        caracts_numpy = TrainingDatasetGen.normalization(caracts_pd, self.max_min_file, self.feature_range,
-                                                         True).to_numpy()
-        caracts_dt    = characts.to_dict("list")
+        characts_new = characts[characts[Events_Charact.Process_Name] != "python.exe"]
+        characts_new.sort_values(by=Events_Charact.Time_Stamp_End)
 
-        if np.isnan(np.sum(caracts_numpy)):
-            caracts_numpy = np.nan_to_num(caracts_numpy)
+        characts_pd = characts_new.drop([Events_Charact.Time_Stamp_Start], axis=1)
+        characts_pd = characts_pd.drop([Events_Charact.Time_Stamp_End], axis=1)
+        characts_pd = characts_pd.drop([Events_Charact.Process_Name], axis=1)
+        characts_pd = characts_pd.drop([Events_Charact.Direction_IP_Port], axis=1)
+        characts_pd = characts_pd.drop([Events_Charact.Count_Events_Batch], axis=1)
+        characts_pd = characts_pd.drop([Events_Charact.Duration], axis=1)
+        caracts_numpy = TrainingDatasetGen.normalization(characts_pd, self.max_min_file, self.feature_range,
+                                                         True)
+        characts_dt    = characts_new.to_dict("list")
 
         numbs_count, caracts_count = caracts_numpy.shape
-        batch_count = math.ceil(numbs_count / self.batch_size)
+        batch_count = math.floor(numbs_count / self.batch_size)
 
-        metrics_analiz = {}
+        print("Начинаем прогнозирование аномальных событий.")
+        metric_loss = None
+
         # progress_bar = Progbar(batch_count, stateful_metrics=["Расхождение"])
 
-        caracts_tensor = tf.convert_to_tensor(caracts_numpy)
-        caracts_tensor_shape = np.array(caracts_tensor.shape)
-        caracts_tensor = tf.reshape(caracts_tensor, (caracts_tensor_shape[0], 1, 1, caracts_tensor_shape[1]))
-
-        Direction_IP_Port_unic = {}
         for idx in range(0, batch_count, 1):
-            proc = caracts_dt["Process_Name"][idx]
-            if isinstance(caracts_dt["Direction_IP_Port"][idx], str):
-                if caracts_dt["Direction_IP_Port"][idx].rfind(";") != -1:
-                    Direction_IP_Port = caracts_dt["Direction_IP_Port"][idx].split(";")
-                else:
-                    Direction_IP_Port = [caracts_dt["Direction_IP_Port"][idx]]
-                if not proc in Direction_IP_Port_unic:
-                    Direction_IP_Port_unic[proc] = []
-                for d in Direction_IP_Port:
-                    if not d in Direction_IP_Port_unic[proc]:
-                        Direction_IP_Port_unic[proc].append(d)
-            elif not math.isnan(caracts_dt["Direction_IP_Port"][idx]):
-                if not proc in Direction_IP_Port_unic:
-                    Direction_IP_Port_unic[proc] = []
-
-        print("Начинаем анализ с помощью нейросети NetEvent")
-        for idx in range(0, batch_count, 1):
-            batch_x = tf.gather(caracts_tensor, idx)
+            batch_x = []
+            for i in range(self.batch_size):
+                batch_x.append(caracts_numpy[i + (idx * self.batch_size):self.window_size + i + (idx * self.batch_size)])
             try:
+                batch_x = tf.convert_to_tensor(batch_x)
                 batch_x_restored = self.NetEvent.__call__(batch_x)
 
                 loss = self.loss_func(batch_x, batch_x_restored)
                 loss = tf.math.reduce_mean(loss, 1)
                 if idx == 0:
-                    metrics_analiz["loss"] = loss
+                    metric_loss = loss
                 else:
-                    metrics_analiz["loss"] = tf.concat([metrics_analiz["loss"], loss], axis=0)
-                mean_loss = tf.math.reduce_mean(loss)
+                    metric_loss = tf.concat([metric_loss, loss], axis=0)
+                mean_loss = tf.math.reduce_mean(
+                    loss)  # tf.math.multiply(tf.math.reduce_mean(loss), tf.constant(1, dtype=tf.float32))
                 values = [("Расхождение", mean_loss)]
                 # progress_bar.add(1, values=values)
 
-                if caracts_dt["Process_Name"][idx] in Direction_IP_Port_unic:
-                    Direction_IP_Port_proc = Direction_IP_Port_unic[caracts_dt["Process_Name"][idx]]
-                else:
-                    Direction_IP_Port_proc = None
+                self.buffer.append((characts_dt[Events_Charact.Time_Stamp_Start][idx],
+                                    characts_dt[Events_Charact.Time_Stamp_End][idx],
+                                    characts_dt[Events_Charact.Process_Name][idx],
+                                    characts_dt[Events_Charact.Direction_IP_Port][idx],
+                                    float(metric_loss[idx])
+                                    ))
 
-                self.buffer.append({caracts_dt["Process_Name"][idx]: (metrics_analiz["loss"][idx],
-                                                                 caracts_dt["Time_Stamp_Start"][idx],
-                                                                 caracts_dt["Time_Stamp_End"][idx],
-                                                                 Direction_IP_Port_proc)})
             except Exception as err:
                 logging.exception(f"Ошибка!\n{err}")
                 print(np.array(batch_x).shape)
                 continue
         print("Анализ с помощью нейросети NetEvent завершён")
 
+    def data_collector(self, name_device, device):
+        HOST, PORT = device
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+            sock.bind((HOST, PORT))
+            sock.listen(0)
+
+            print(f"Запущен сборщик событий для устройства: {name_device}")
+            with self.context.wrap_socket(sock, server_side=True) as ssock:
+                while True:
+                    connection, client_address = ssock.accept()
+                    data = receive_data(connection)
+                    connection.close()
+                    self.characts[name_device].append(data)
+
     def run(self):
-        with open(self.err_file, "w") as f: # sys.stderr
-            with open(self.log_file, "w") as f: # sys.stdout
+        with open(self.err_file, "w") as f:         # sys.stderr
+            with open(self.log_file, "w") as f:     # sys.stdout
                 print("Поток анализа событий процессов запущен!")
 
-                window_size = 50
-                charact_file_name = "events_characters_"
-                user_dir = "Жертва"
-                path_event_analysis = "\\\\VictimPC\\RATDetect\\WorkDirectory"
-
-                analizator = AnalyzerEvents(window_size, charact_file_name,
-                                            path_event_analysis, user_dir)
-
-                analizator.run()
+                for name_device in self.protected_devices:
+                    self.characts[name_device] = list()
+                    self.threads_collector[name_device] = Thread(target=self.data_collector, args=(name_device,
+                                                                    self.protected_devices[name_device],))
+                    self.threads_collector[name_device].start()
 
                 while True:
-                    files_characts = GetFilesCSV(self.path_event_analysis)
+                    for name_device in self.characts:
+                        characts_data = copy.copy(self.characts[name_device])
 
-                    if len(files_characts) > 0:
-                        print(f"Обнаружено {len(files_characts)} файлов с характеристиками процессов.")
-                        print("Загружаем данные о событиях")
-                        characts_all = None
-                        for file in files_characts:
-                            if characts_all is None:
-                                characts_all = pd.read_csv(file)
-                            else:
-                                temp = pd.read_csv(file)
-                                characts_all = pd.concat([characts_all, temp], ignore_index=True)
-                            Path(file).unlink()
-
-                        self.NeiroAnalyze(characts_all)
-                    else:
-                        print("Ждём данные о событиях процессов")
-                        time.sleep(5)
+                        if len(characts_data) > 0:
+                            self.characts[name_device].clear()
+                            # print(characts_data[0])
+                            # print(type(characts_data[0]))
+                            self.NeiroAnalyze(characts_data[0])
+                    time.sleep(1)

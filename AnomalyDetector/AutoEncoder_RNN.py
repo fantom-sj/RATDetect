@@ -37,9 +37,6 @@ class Autoencoder(AutoencoderBase):
         self.valid_loss_tracker = keras.metrics.Mean(name="valid_loss")
         self.valid_mae_metric = keras.metrics.MeanAbsoluteError(name="valid_mae")
 
-        self.history_loss = {"epoch": [], "step": [], "loss": [], "mean_loss": [], "mae": []}
-        self.history_valid = {"epoch": [], "step": [], "loss": [], "mean_loss": [], "mae": []}
-
     def createSubModel(self, arhiteche, name):
         sub_model = Sequential(name=name)
         for layer in arhiteche:
@@ -66,8 +63,8 @@ class Autoencoder(AutoencoderBase):
                         return_sequences=return_sequences,
                         name=f"layer_t.{layer}_type.{shape_1}_to_{shape_2}",
                         input_shape=(self.window_size, shape_2),
-                        dtype="float64"
-                        # stateful=True,
+                        dtype="float32",
+                        stateful=True,
                     )
                 )
                 sub_model.add(BatchNormalization(dtype="float64"))
@@ -84,8 +81,8 @@ class Autoencoder(AutoencoderBase):
                         return_sequences=return_sequences,
                         name=f"layer_t.{layer}_type.{shape_1}_to_{shape_2}",
                         input_shape=(self.window_size, shape_2),
-                        dtype="float64"
-                        # stateful=True,
+                        dtype="float64",
+                        stateful=True,
                     )
                 )
                 sub_model.add(BatchNormalization(dtype="float64"))

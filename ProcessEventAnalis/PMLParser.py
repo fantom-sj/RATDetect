@@ -2,6 +2,7 @@ from ProcmonParser.consts import ColumnToOriginalName, Column, EventClass
 from ProcmonParser import ProcmonLogsReader, Event
 
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 
 class ParserEvents:
@@ -11,8 +12,9 @@ class ParserEvents:
         Принимает на вход строковое имя файла pml_file_name.
     """
 
-    def __init__(self, pml_file_name: str):
-        self.pml_file_name = pml_file_name
+    def __init__(self, pml_file_name: str, process_eneble=False):
+        self.pml_file_name  = pml_file_name
+        self.process_eneble = process_eneble
 
         self.events = []
         self.Anomaly_intensity = []
@@ -25,10 +27,15 @@ class ParserEvents:
         with open(self.pml_file_name, "rb") as pml_file:
             pml_readers = ProcmonLogsReader(pml_file)
             self.events.clear()
+            if self.process_eneble:
+                bar = tqdm(desc="Процесс загрузки событий")
+
             for pml_record in pml_readers:
                 try:
                     event = self.GetEventInformation(pml_record)
                     self.events.append(event)
+                    if self.process_eneble:
+                        bar.update(1)
                 except UnicodeEncodeError:
                     continue
         return self.events
@@ -42,6 +49,8 @@ class ParserEvents:
 
             for pml_record in pml_readers:
                 try:
+                    if pml_record.process is None:
+                        continue
                     event = self.GetEventInformation(pml_record)
                     yield event
                 except UnicodeEncodeError:

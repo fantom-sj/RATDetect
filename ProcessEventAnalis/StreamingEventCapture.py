@@ -5,8 +5,10 @@ import subprocess as sp
 import re
 
 
-class SnifferEventProc:
+class SnifferEventProc(Thread):
     def __init__(self, size_pml_time, event_file_mask, path_procmon, path_procmon_config, path_name):
+        super().__init__()
+
         self.size_pml_time          = size_pml_time
         self.event_file_mask        = event_file_mask
         self.path_name              = path_name
@@ -68,10 +70,7 @@ class SnifferEventProc:
             event_file = f"{self.event_file_mask}{self.last_file_id}.pml"
 
             try:
-                th_sniff = Thread(target=self.__StartProcmonSniff__, args=(event_file,))
-                th_sniff.start()
-                th_sniff.join()
-
+                self.__StartProcmonSniff__(event_file)
                 self.last_file_id += 1
             except Exception as err:
                 print("Ошибка во время снифинга событий процессов! %s" % str(err))
@@ -85,10 +84,10 @@ class SnifferEventProc:
             self.GetLastFileId()
             print(f"Индекс последнего файла с событиями процессов: {self.last_file_id}")
 
-            self.run_sniff = True
-            self.th_main_sniff = Thread(target=self.SniffLoop, args=())
-            self.th_main_sniff.start()
             print("Поток сбора событий процессов запущен")
+            self.run_sniff = True
+            self.SniffLoop()
+
         else:
             print("Директория для сбора событий процессов не существует, создайте её и перезапустите процесс!")
 
