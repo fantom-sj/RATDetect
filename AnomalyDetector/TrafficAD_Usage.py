@@ -1,10 +1,11 @@
 import tensorflow as tf
+tf.config.set_visible_devices([], 'GPU')
 from scipy.signal import savgol_filter
 from tensorflow import keras
 from keras.utils import Progbar
 from ipaddress import IPv4Address
 
-from AutoEncoder_RNN import TrainingDatasetGen
+from AutoEncoder_RNN import TrainingDatasetNetFlowTrafficGen
 from NetTrafficAnalis.TrafficСharacts import HUNDREDS_OF_NANOSECONDS
 from NetTrafficAnalis.StreamingTrafficAnalyzer import AnalyzerPackets
 from NetTrafficAnalis.TestDatasetCreate import TrafficTestGen, sequence, increasingly, random, descending
@@ -19,7 +20,8 @@ from tqdm import tqdm
 
 
 def CreateTestDataset(window_size):
-    path_name = "F:\\VNAT\\Mytraffic\\youtube_me"
+    path_name = "D:\\Пользователи\\Admin\\Рабочий стол\\"\
+                "Статья по КБ\\RATDetect\\WorkDirectory\\traffic_characters.csv"
     normal_name = "test_dataset_narmal"
     anomal_name = "test_dataset_anomaly"
 
@@ -63,9 +65,9 @@ def CreateTestDataset(window_size):
 def main():
 
     # Парамеры автоэнкодера
-    versia          = "0.9.4"
-    batch_size      = 1
-    window_size     = 1
+    versia          = "1.1"
+    batch_size      = 5
+    window_size     = 10
     loss_func       = keras.losses.mse
     path_model      = "modeles\\TrafficAnomalyDetector\\" + versia + "\\"
     max_min_file    = path_model + "M&M_traffic_VNAT.csv"
@@ -93,10 +95,11 @@ def main():
     # charact_index = analizator.index_charact_file
 
     feature_range   = (-1, 1)
-    characts_data   = pd.DataFrame()
-    for charact_index in range(1):
-        characts_data = pd.concat([characts_data, pd.read_csv(f"{path_name}\\{charact_file_mask}{charact_index}.csv")],
-                                  ignore_index=True)
+    characts_data   = pd.read_csv("D:\\Пользователи\\Admin\\Рабочий стол\\"
+                                         "Статья по КБ\\RATDetect\\WorkDirectory\\traffic_characters.csv")
+    # for charact_index in range(1):
+    #     characts_data = pd.concat([characts_data, pd.read_csv(f"{path_name}\\{charact_file_mask}{charact_index}.csv")],
+    #                               ignore_index=True)
 
     characts_data = characts_data[((characts_data["Flow_Charact.Src_IP_Flow"] != 3232270593) &
                                    (characts_data["Flow_Charact.Dst_IP_Flow"] != 3232270593)) &
@@ -104,17 +107,28 @@ def main():
                                    (characts_data["Flow_Charact.Dst_IP_Flow"] == 3232238208))]
     characts_data.sort_values(by="Flow_Charact.Time_Stamp_End")
 
-    characts_np     = characts_data.to_dict("records")
-    characts_pd     = characts_data.drop(["Flow_Charact.Time_Stamp_Start"], axis=1)
-    characts_pd     = characts_pd.drop(["Flow_Charact.Time_Stamp_End"], axis=1)
-    characts_pd     = characts_pd.drop(["Flow_Charact.Src_IP_Flow"], axis=1)
-    characts_pd     = characts_pd.drop(["Flow_Charact.Dst_IP_Flow"], axis=1)
-    characts_pd     = characts_pd.drop(["Flow_Charact.Src_Port_Flow"], axis=1)
-    characts_pd     = characts_pd.drop(["Flow_Charact.Dst_Port_Flow"], axis=1)
-    characts_numpy  = TrainingDatasetGen.normalization(characts_pd, max_min_file, feature_range, True)
+    characts_np = characts_data.to_dict("records")
+    characts_pd = characts_data.drop(["Flow_Charact.Time_Stamp_Start"], axis=1)
+    characts_pd = characts_pd.drop(["Flow_Charact.Time_Stamp_End"], axis=1)
+    # characts_pd = characts_pd.drop(["Flow_Charact.Src_IP_Flow"], axis=1)
+    # characts_pd = characts_pd.drop(["Flow_Charact.Dst_IP_Flow"], axis=1)
+    # characts_pd = characts_pd.drop(["Flow_Charact.Src_Port_Flow"], axis=1)
+    # characts_pd = characts_pd.drop(["Flow_Charact.Dst_Port_Flow"], axis=1)
 
-    numbs_count, characts_count    = characts_numpy.shape
-    batch_count                    = round(numbs_count/batch_size)
+    # Выявленные ненужные признаки:
+    characts_pd = characts_pd.drop(["Flow_Charact.Len_Headers_Fwd"], axis=1)
+    characts_pd = characts_pd.drop(["Flow_Charact.Std_Len_Fwd_Packets"], axis=1)
+    characts_pd = characts_pd.drop(["Flow_Charact.Count_Flags_URG"], axis=1)
+    characts_pd = characts_pd.drop(["Flow_Charact.Count_Flags_URG_Bwd"], axis=1)
+    characts_pd = characts_pd.drop(["Flow_Charact.Count_Flags_URG_Fwd"], axis=1)
+    characts_pd = characts_pd.drop(["Flow_Charact.Std_Active_Time_Flow"], axis=1)
+    characts_pd = characts_pd.drop(["Flow_Charact.Std_InActive_Time_Flow"], axis=1)
+    characts_pd = characts_pd.drop(["Flow_Charact.Std_Time_Diff_Fwd_Pkts"], axis=1)
+
+    dataset = TrainingDatasetNetFlowTrafficGen(characts_pd, max_min_file, feature_range,
+                                          batch_size, window_size, 0.0)
+
+    numbs_count, characts_count    = (dataset.numbs_count, dataset.characts_count)
 
     # Определение автоэнкодера
     autoencoder = tf.keras.models.load_model(model)
@@ -124,71 +138,64 @@ def main():
     metrics_analiz = {}
 
     valid_metrics_name = ["Расхождение"]
-    progress_bar = Progbar(batch_count, stateful_metrics=valid_metrics_name)
+    progress_bar = Progbar(len(dataset), stateful_metrics=valid_metrics_name)
 
-    for idx in range(0, batch_count, 1):
-        batch_x = []
-        for i in range(batch_size):
-            batch_x.append(characts_numpy[i + (idx * batch_size):window_size + i + (idx * batch_size)])
-        try:
-            batch_x = tf.convert_to_tensor(batch_x)
-            # batch_x = tf.reshape(batch_x, (1, windows_size, characts_count))
-            batch_x_restored = autoencoder.predict(batch_x, verbose=0)
+    for step, batch_x in enumerate(dataset):
+        logits = autoencoder.__call__(batch_x)
+        loss_value = loss_func(batch_x, logits)
 
-            loss = loss_func(batch_x, batch_x_restored)
-            loss = tf.math.reduce_mean(loss, 1)
-            if idx == 0:
-                metrics_analiz["loss"] = loss
-            else:
-                metrics_analiz["loss"] = tf.concat([metrics_analiz["loss"], loss], axis=0)
-            mean_loss = tf.math.multiply(tf.math.reduce_mean(loss), tf.constant(100, dtype=tf.float64))
-            values = [("Расхождение", mean_loss)]
-            progress_bar.add(1, values=values)
+        loss = float(np.mean(np.array(loss_value)[0]))
 
-        except Exception as err:
-            logging.exception(f"Ошибка!\n{err}")
-            print(batch_x.shape)
-            continue
-
-    flow_anomal_res = {}
-    real_anomaly = []
-    data = np.array(metrics_analiz["loss"])
-
-    for idx in range(len(characts_np)):
-        flow_name = f'{IPv4Address(characts_np[idx]["Flow_Charact.Src_IP_Flow"])}-' \
-                    f'{IPv4Address(characts_np[idx]["Flow_Charact.Dst_IP_Flow"])}-'
-
-        if "129" in flow_name:
-            real_anomaly.append(1)
+        # loss_tf = tf.math.reduce_mean(loss, 1)
+        if step == 0:
+            metrics_analiz["loss"] = loss_value
         else:
-            real_anomaly.append(0)
+            metrics_analiz["loss"] = tf.concat([metrics_analiz["loss"], loss_value], axis=0)
 
-        if not flow_name in flow_anomal_res:
-            flow_anomal_res[flow_name] = list()
-        flow_anomal_res[flow_name].append(data[idx])
+        values = [("Ошибка", loss)]
+        progress_bar.add(1, values=values)
 
-    anomaly_level_flow = {}
-    for flow in flow_anomal_res:
-        anomaly_level_flow[flow] = 0
-        for loss in flow_anomal_res[flow]:
-            if loss >= porog_anomaly:
-                anomaly_level_flow[flow] += 1
+    print(metrics_analiz["loss"])
 
-    no_anomaly_level_flow = {}
-    for flow in flow_anomal_res:
-        no_anomaly_level_flow[flow] = 0
-        for loss in flow_anomal_res[flow]:
-            if loss < porog_anomaly:
-                no_anomaly_level_flow[flow] += 1
-
-    print("\nУровень аномальной активности для каждого сетевого потока:")
-    for flow in anomaly_level_flow:
-        print(f"{flow}: {anomaly_level_flow[flow]}")
-
-    print("\nУровень нормальной активности для каждого сетевого потока:")
-    for flow in no_anomaly_level_flow:
-        print(f"{flow}: {no_anomaly_level_flow[flow]}")
-
+    # flow_anomal_res = {}
+    # real_anomaly = []
+    # data = np.array(metrics_analiz["loss"])
+    #
+    # for idx in range(len(characts_np)):
+    #     flow_name = f'{IPv4Address(characts_np[idx]["Flow_Charact.Src_IP_Flow"])}-' \
+    #                 f'{IPv4Address(characts_np[idx]["Flow_Charact.Dst_IP_Flow"])}-'
+    #
+    #     if "129" in flow_name:
+    #         real_anomaly.append(1)
+    #     else:
+    #         real_anomaly.append(0)
+    #
+    #     if not flow_name in flow_anomal_res:
+    #         flow_anomal_res[flow_name] = list()
+    #     flow_anomal_res[flow_name].append(data[idx])
+    #
+    # anomaly_level_flow = {}
+    # for flow in flow_anomal_res:
+    #     anomaly_level_flow[flow] = 0
+    #     for loss in flow_anomal_res[flow]:
+    #         if loss >= porog_anomaly:
+    #             anomaly_level_flow[flow] += 1
+    #
+    # no_anomaly_level_flow = {}
+    # for flow in flow_anomal_res:
+    #     no_anomaly_level_flow[flow] = 0
+    #     for loss in flow_anomal_res[flow]:
+    #         if loss < porog_anomaly:
+    #             no_anomaly_level_flow[flow] += 1
+    #
+    # print("\nУровень аномальной активности для каждого сетевого потока:")
+    # for flow in anomaly_level_flow:
+    #     print(f"{flow}: {anomaly_level_flow[flow]}")
+    #
+    # print("\nУровень нормальной активности для каждого сетевого потока:")
+    # for flow in no_anomaly_level_flow:
+    #     print(f"{flow}: {no_anomaly_level_flow[flow]}")
+    #
     mng = plt.get_current_fig_manager()
     mng.window.showMaximized()
 
@@ -202,7 +209,6 @@ def main():
     # plt.plot(real_anomaly, label="Обнаруженные аномалии", color="tab:red")
     plt.plot([porog_anomaly for _ in range(len_metrix)], label="Уровень нормальных данных", color="tab:red")
     plt.plot(metrics_analiz["loss"], label="Обнаруженные аномалии", color="tab:blue")
-
 
     plt.legend(fontsize=10)
     plt.tight_layout()

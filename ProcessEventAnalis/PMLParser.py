@@ -49,6 +49,8 @@ class ParserEvents:
 
             for pml_record in pml_readers:
                 try:
+                    if pml_record == "novalid":
+                        continue
                     if pml_record.process is None:
                         continue
                     event = self.GetEventInformation(pml_record)

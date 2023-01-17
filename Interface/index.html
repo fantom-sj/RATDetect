@@ -5,6 +5,11 @@
     <title>Система мониторинга RAT-троянов</title>
     <script type="text/javascript" src="/eel.js"></script>
 
+    <script src="plugins/jquery/jquery.min.js"></script>
+    <script src="plugins/jquery-ui/jquery-ui.min.js"></script>
+
+    <script type="text/javascript" src="plugins/Chart.js/chart.umd.js"></script>
+
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
     <link rel="stylesheet" href="plugins/fontawesome-free/css/all.min.css">
     <link rel="stylesheet" href="plugins/fontawesome-free/css/font-awesome.css">
@@ -12,8 +17,8 @@
     <link rel="stylesheet" href="style/adminlte.css">
     <link rel="stylesheet" href="style/style.css">
 
-    <script src="plugins/jquery/jquery.min.js"></script>
-    <script src="plugins/jquery-ui/jquery-ui.min.js"></script>
+    <script src="js/script.js"></script>
+    <script type="text/javascript" src="js/chart_event_loss.js"></script>
 
     <script>
       $(function(){
@@ -43,7 +48,9 @@
         <!-- Сам контент-->
         <section class="content">
           <div class="container-fluid">
+            <div id="data_receiver">
 
+            </div>
           </div>
         </section>
       </div>

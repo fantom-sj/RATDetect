@@ -1,11 +1,10 @@
 from AutoEncoder_RNN import *
 from pathlib import Path
-from sklearn.ensemble import IsolationForest
-import pickle
+
 
 def main(versia, arhiteche, window_size):
     # Параметры датасета
-    batch_size          = 1
+    batch_size          = 10
     validation_factor   = 0.01
     feature_range       = (-1, 1)
 
@@ -49,17 +48,17 @@ def main(versia, arhiteche, window_size):
         Path(path_model + "Checkpoint\\").mkdir()
 
     data = pd.read_csv(dataset)
-    # data = data[:10000]
+    data = data[:10000]
     print(f"Загружено {len(data)} характеристик")
     data = data.sort_values(by="Flow_Charact.Time_Stamp_Start")
 
     data = data.drop(["Flow_Charact.Time_Stamp_Start"], axis=1)
     data = data.drop(["Flow_Charact.Time_Stamp_End"], axis=1)
 
-    # data = data.drop(["Flow_Charact.Src_IP_Flow"], axis=1)
-    # data = data.drop(["Flow_Charact.Dst_IP_Flow"], axis=1)
-    # data = data.drop(["Flow_Charact.Src_Port_Flow"], axis=1)
-    # data = data.drop(["Flow_Charact.Dst_Port_Flow"], axis=1)
+    data = data.drop(["Flow_Charact.Src_IP_Flow"], axis=1)
+    data = data.drop(["Flow_Charact.Dst_IP_Flow"], axis=1)
+    data = data.drop(["Flow_Charact.Src_Port_Flow"], axis=1)
+    data = data.drop(["Flow_Charact.Dst_Port_Flow"], axis=1)
 
     # Выявленные ненужные признаки:
     data = data.drop(["Flow_Charact.Len_Headers_Fwd"], axis=1)
@@ -74,7 +73,7 @@ def main(versia, arhiteche, window_size):
     # print(data.to_dict("records"))
     print("Загрузка датасета завершена.")
 
-    training_dataset = TrainingDatasetNetFlowTrafficGen(data, max_min_file, feature_range,
+    training_dataset = TrainingDatasetGen(data, max_min_file, feature_range,
                                           batch_size, window_size, validation_factor)
     print(training_dataset.numbs_count, training_dataset.characts_count)
     print("Обучающий датасет создан.")
@@ -115,18 +114,17 @@ def main(versia, arhiteche, window_size):
 
 
 if __name__ == '__main__':
-    versia = "1.3"
+    versia = "1.4_test"
 
-    window_size = 10
+    window_size = 1
 
     encoder = {"1_Input": (window_size, 51), "2_GRU_seq": (43, 51), "3_GRU_seq": (35, 43),
-               "4_GRU_seq": (27, 35), "5_GRU_seq": (19, 27), "6_GRU_seq": (11, 19)}
-    decoder = {"7_Input": (window_size, 11), "8_GRU_seq": (19, 11), "9_GRU_seq": (27, 19),
-               "10_GRU_seq": (35, 27), "11_GRU_seq": (43, 35), "12_GRU_seq": (51, 43)}
-    # "6_RepeatVector": (window_size, None),
+               "4_GRU_seq": (27, 35), "5_GRU_seq": (19, 27), "6_GRU": (11, 19)}
+    decoder = {"7_RepeatVector": (window_size, None), "8_GRU_seq": (19, 11), "9_GRU_seq": (27, 19),
+               "10_GRU_seq": (35, 27), "11_GRU_seq": (43, 35), "12_GRU": (51, 43)}
 
     arhiteche = (encoder, decoder)
     print("\n\n" + versia)
 
-    with tf.name_scope("NetTraffic") as scope:
-        main(versia, arhiteche, window_size)
+    # with tf.name_scope("NetTraffic") as scope:
+    main(versia, arhiteche, window_size)

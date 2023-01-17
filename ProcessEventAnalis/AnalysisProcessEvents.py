@@ -99,11 +99,11 @@ class ProcessThreads:
 
 
 class AnalyzerEvents(Thread):
-    def __init__(self, thread_time_limit, charact_file_mask, path_name, user_dir, HOST, PORT, SERVER_HOST, SERVER_PORT):
+    def __init__(self, thread_time_limit, path_name, user_dir, max_len_buffer,
+                 HOST, PORT, SERVER_HOST, SERVER_PORT, cert):
         super().__init__()
 
         self.thread_time_limit      = thread_time_limit
-        self.charact_file_mask      = charact_file_mask
         self.path_name              = path_name
         self.user_dir               = user_dir
 
@@ -123,10 +123,11 @@ class AnalyzerEvents(Thread):
         self.SERVER_PORT = SERVER_PORT
 
         self.buffer_waiting = pd.DataFrame()
-        self.max_len_buffer = 20
+        self.max_len_buffer = max_len_buffer
 
-        self.context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        self.context.load_verify_locations("ca.crt")
+        if not cert is None:
+            self.context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            self.context.load_verify_locations(cert)
 
         self.GetFilesEvents()
 
@@ -169,12 +170,12 @@ class AnalyzerEvents(Thread):
         return len(self.files_events_arr)
 
     def GetLastFileId(self):
-        path_home = Path(self.path_name)
+        path_home = Path(self.path_name + "\\" + "Обработанные файлы")
         file_arr = []
 
         for file in path_home.iterdir():
             file = str(file)
-            if not (".csv" in file):
+            if not ((".pml" in file) or (".PML" in file)):
                 continue
             else:
                 file_arr.append(file)
@@ -204,8 +205,6 @@ class AnalyzerEvents(Thread):
         pbar.close()
 
         path_new = self.path_name + "\\" + "Обработанные файлы"
-        if not Path(path_new).exists():
-            Path(path_new).mkdir()
         file_only_name = file_name.split("\\")[-1]
         Path(file_name).rename(path_new + "\\" + file_only_name)
 
@@ -255,45 +254,84 @@ class AnalyzerEvents(Thread):
             print("Не выявлено ни одного набора характеристик!")
             return False
         else:
-            try:
-                print(f"Выявлены {len(array_characts)} характеристики событий процессов")
-                pd_characts = pd.DataFrame(array_characts)
-                pd_characts.sort_values(by=Events_Charact.Time_Stamp_End)
-
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0) as sock:
-                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-                    sock.bind((self.HOST, self.PORT))
-
-                    try:
-                        sock.connect((self.SERVER_HOST, self.SERVER_PORT))
-
-                        with self.context.wrap_socket(sock, server_hostname=self.HOST) as client:
-                            if len(self.buffer_waiting) > 0:
-                                pd_characts = pd.concat([self.buffer_waiting, pd_characts], ignore_index=True)
-                                self.buffer_waiting = pd.DataFrame()
-
-                            serialized_data = pickle.dumps(pd_characts, -1)
-                            client.sendall(struct.pack(">I", len(serialized_data)))
-                            client.sendall(serialized_data)
-                            print("Данные успешно отправлены!")
-
-                    except ConnectionRefusedError:
-                        if len(self.buffer_waiting) == 0:
-                            self.buffer_waiting = pd_characts
-                        else:
-                            self.buffer_waiting = pd.concat([self.buffer_waiting, pd_characts], ignore_index=True)
-                            if len(self.buffer_waiting) > self.max_len_buffer:
-                                self.buffer_waiting = self.buffer_waiting.iloc[-self.max_len_buffer:]
-                        print("Не удалось установить соединение с сервером, данные сохранены в буфер")
-
-            except Exception as err:
-                logging.exception(f"Ошибка!\n{err}")
-
             return array_characts
+
+    def NetTransfCharacters(self, array_characts):
+        try:
+            print(f"Выявлены {len(array_characts)} характеристики событий процессов")
+            pd_characts = pd.DataFrame(array_characts)
+            pd_characts.sort_values(by=Events_Charact.Time_Stamp_End)
+
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0) as sock:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+                sock.bind((self.HOST, self.PORT))
+
+                try:
+                    sock.connect((self.SERVER_HOST, self.SERVER_PORT))
+
+                    with self.context.wrap_socket(sock, server_hostname=self.HOST) as client:
+                        if len(self.buffer_waiting) > 0:
+                            pd_characts = pd.concat([self.buffer_waiting, pd_characts], ignore_index=True)
+                            self.buffer_waiting = pd.DataFrame()
+
+                        serialized_data = pickle.dumps(pd_characts, -1)
+                        client.sendall(struct.pack(">I", len(serialized_data)))
+                        client.sendall(serialized_data)
+                        print("Данные успешно отправлены!")
+
+                except ConnectionRefusedError:
+                    if len(self.buffer_waiting) == 0:
+                        self.buffer_waiting = pd_characts
+                    else:
+                        self.buffer_waiting = pd.concat([self.buffer_waiting, pd_characts], ignore_index=True)
+                        if len(self.buffer_waiting) > self.max_len_buffer:
+                            self.buffer_waiting = self.buffer_waiting.iloc[-self.max_len_buffer:]
+                    print("Не удалось установить соединение с сервером, данные сохранены в буфер")
+
+        except Exception as err:
+            logging.exception(f"Ошибка!\n{err}")
+
+    def DirectProcessingEvents(self, charact_file_name):
+        if Path(self.path_name).exists():
+            path_new = self.path_name + "\\" + "Обработанные файлы"
+            if not Path(path_new).exists():
+                Path(path_new).mkdir()
+
+            count_file_events = self.GetFilesEvents()
+            if count_file_events == 0:
+                print("Не найдено ни одного PML файла")
+                return None
+
+            print(f"Найдено {count_file_events} файлов с событиями")
+            try:
+                characts_pd = pd.DataFrame()
+                for file in self.files_events_arr:
+                    file_on = file.split('\\')[-1]
+                    print(f"Обрабатываем файл: {file_on}")
+                    array_characts = self.ProcessingEvents([file])
+                    characts_pd = pd.concat([characts_pd, pd.DataFrame(array_characts)], ignore_index=True)
+                characts_pd.sort_values(by=Events_Charact.Time_Stamp_End)
+                characts_pd.to_csv(charact_file_name)
+            except IndexError:
+                return None
+        else:
+            print("Директория с файлами событий для анализа не существует")
+            return None
 
     def run(self):
         if Path(self.path_name).exists():
+            path_new = self.path_name + "\\" + "Обработанные файлы"
+            if not Path(path_new).exists():
+                Path(path_new).mkdir()
+            for file in Path(path_new).iterdir():
+                file_name = str(file)
+                if not ((".pml" in file_name) or (".PML" in file_name)):
+                    file.unlink()
+                else:
+                    file_only_name = str(file).split("\\")[-1]
+                    file.rename(path_new + "\\" + file_only_name)
+
             self.run_analyz = True
 
             print("Поток предварительного анализа событий процессов запущен")
@@ -305,7 +343,8 @@ class AnalyzerEvents(Thread):
                     continue
                 else:
                     try:
-                        self.ProcessingEvents(self.files_events_arr)
+                        array_characts = self.ProcessingEvents(self.files_events_arr)
+                        self.NetTransfCharacters(array_characts)
                         self.files_events_arr.clear()
                     except IndexError:
                         continue
@@ -319,11 +358,11 @@ class AnalyzerEvents(Thread):
 
 
 if __name__ == '__main__':
-    path_name                   = "D:\\train_dataset_Nout"
-    thread_time_limit           = 1 * 50 * HUNDREDS_OF_NANOSECONDS
-    charact_file_name           = "train_dataset_"
-    user_dir                    = "Admin"
+    path_name         = "F:\\DataSets\\browsers"
+    thread_time_limit = 1 * 50 * HUNDREDS_OF_NANOSECONDS
+    charact_file_name = "F:\\DataSets\\browsers\\train_dataset_browsers_2.csv"
+    user_dir          = "Admin"
 
-    analizator = AnalyzerEvents(thread_time_limit, charact_file_name, path_name, user_dir)
-    analizator.start()
-    analizator.join()
+    analizator = AnalyzerEvents(thread_time_limit, path_name, user_dir, 20,
+                 None, None, None, None, None)
+    analizator.DirectProcessingEvents(charact_file_name)

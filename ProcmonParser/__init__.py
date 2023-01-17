@@ -33,7 +33,10 @@ class ProcmonLogsReader(object):
             raise StopIteration
         current_index = self._current_event_index
         self._current_event_index += 1
-        return self[current_index]
+        try:
+            return self[current_index]
+        except:
+            return "novalid"
 
     if PY2:
         next = __next__

@@ -18,6 +18,9 @@ class SnifferEventProc(Thread):
         self.tepm_path = f"{self.path_name}\\temp"
         if not Path(self.tepm_path).exists():
             Path(self.tepm_path).mkdir()
+        else:
+            for file in Path(self.tepm_path).iterdir():
+                file.unlink()
 
         self.last_file_id   = None
         self.th_main_sniff  = None

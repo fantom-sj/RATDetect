@@ -7,34 +7,29 @@ import os
 import numpy as np
 
 class DecisionSystem(Thread):
-    def __init__(self, buffer_traffic: list, buffer_events: list, buffer_anomaly_proc: list):
+    def __init__(self, buffer_traffic: list, buffer_events: list, buffer_output: dict):
         super().__init__()
 
         self.buffer_traffic      = buffer_traffic
         self.buffer_events       = buffer_events
-        self.buffer_anomaly_proc = buffer_anomaly_proc
 
-        self.porog_traffic = 0.5
+        self.porog_traffic = 0.2
         self.porog_event   = 0.3
 
-        self.presumably_traffic = []
-        self.presumably_events  = []
+        self.presumably_traffic = list()
+        self.presumably_events  = list()
+
+        self.buffer_output = buffer_output
+        self.buffer_output["traffic"]    = list()
+        self.buffer_output["events"]     = list()
+        self.buffer_output["statistics"] = dict()
+
+        self.ID_events  = 0
+        self.ID_traffic = 0
 
         self.metrics = ["NoRATDetectRight", "NoRATDetectNoRight", "RATDetectRight", "RATDetectNoRight",
                         "NoRATReal", "RATReal"]
         self.real_rat_process = ["NingaliNETServer.exe", "RabbitHoleServer.exe", "RevengeRATServer.exe"]
-        self.res_file = "GrafPrint\\resultsAnalyze.csv"
-
-        while Path(self.res_file).exists():
-            try:
-                Path(self.res_file).unlink()
-            except:
-                continue
-
-        col_name = f"index,{self.metrics[0]},{self.metrics[1]},{self.metrics[2]},{self.metrics[3]}," \
-                   f"{self.real_rat_process[0]},{self.real_rat_process[1]}, {self.real_rat_process[2]},OtherProcess"
-        with open(self.res_file, "w") as file:
-            file.write(col_name)
 
     def ScannerBufferTraffic(self):
         if len(self.buffer_traffic) > 0:
@@ -45,9 +40,28 @@ class DecisionSystem(Thread):
                 if loss >= self.porog_traffic:
                     self.presumably_traffic.append((Time_Stamp_Start, Time_Stamp_End, Src_IP_Flow,
                                                     Dst_IP_Flow, Src_Port_Flow, Dst_Port_Flow, True))
+                    self.buffer_output["traffic"].append({"ID":                 self.ID_traffic,
+                                                          "Time_Stamp_Start":   Time_Stamp_Start,
+                                                          "Time_Stamp_End":     Time_Stamp_End,
+                                                          "Src_IP_Flow":        Src_IP_Flow,
+                                                          "Dst_IP_Flow":        Dst_IP_Flow,
+                                                          "Src_Port_Flow":      Src_Port_Flow,
+                                                          "Dst_Port_Flow":      Dst_Port_Flow,
+                                                          "loss": float(loss),
+                                                          "anomaly":            1})
                 else:
                     self.presumably_traffic.append((Time_Stamp_Start, Time_Stamp_End, Src_IP_Flow,
                                                     Dst_IP_Flow, Src_Port_Flow, Dst_Port_Flow, False))
+                    self.buffer_output["traffic"].append({"ID":                 self.ID_traffic,
+                                                          "Time_Stamp_Start":   Time_Stamp_Start,
+                                                          "Time_Stamp_End":     Time_Stamp_End,
+                                                          "Src_IP_Flow":        Src_IP_Flow,
+                                                          "Dst_IP_Flow":        Dst_IP_Flow,
+                                                          "Src_Port_Flow":      Src_Port_Flow,
+                                                          "Dst_Port_Flow":      Dst_Port_Flow,
+                                                          "loss":               float(loss),
+                                                          "anomaly":            0})
+                self.ID_traffic += 1
 
     def ScannerBufferEvents(self):
         if len(self.buffer_events) > 0:
@@ -71,84 +85,84 @@ class DecisionSystem(Thread):
                         except:
                             print(ip_port)
 
+                if len(arr_ip_port) == 0:
+                    connection = 0
+                else:
+                    connection = arr_ip_port
+
                 if loss >= self.porog_event:
                     self.presumably_events.append((Time_Stamp_Start, Time_Stamp_End, Process_Name, arr_ip_port, True))
+                    self.buffer_output["events"].append({"ID":               self.ID_events,
+                                                         "Time_Stamp_Start": Time_Stamp_Start,
+                                                         "Time_Stamp_End":   Time_Stamp_End,
+                                                         "Process_Name":     Process_Name,
+                                                         "connection":       connection,
+                                                         "loss":             float(loss),
+                                                         "anomaly":          1})
                 else:
                     self.presumably_events.append((Time_Stamp_Start, Time_Stamp_End, Process_Name, arr_ip_port, False))
+                    self.buffer_output["events"].append({"ID":               self.ID_events,
+                                                         "Time_Stamp_Start": Time_Stamp_Start,
+                                                         "Time_Stamp_End":   Time_Stamp_End,
+                                                         "Process_Name":     Process_Name,
+                                                         "connection":       connection,
+                                                         "loss":             float(loss),
+                                                         "anomaly":          0})
+                self.ID_events += 1
 
     def run(self):
-        index = 0
+        results = {
+            "SafeProcesses":        [],
+            "SuspiciousProcesses":  [],
+            "SafeNetFlow":          [],
+            "SuspiciousNetFlow":    [],
+
+            "RAT_trojans": {"NingaliNETServer.exe": 0, "RabbitHoleServer.exe": 0, "RevengeRATServer.exe": 0},
+
+            "CorrectDetectSafeProcesses":   0,
+            "NoCorrectDetectSafeProcesses":   0,
+            "CorrectDetectRAT_Trojans":   0,
+            "NoCorrectDetectRAT_Trojans":   0,
+        }
 
         while True:
-            interim_results = {"NoRATDetectRight": 0, "NoRATDetectNoRight": 0, "RATDetectRight": 0,
-                               "RATDetectNoRight": 0, "NoRATReal": 0, "RATReal": 0,
-                               "NingaliNETServer.exe": 0, "RabbitHoleServer.exe": 0, "RevengeRATServer.exe": 0
-                               }
-
-            anomaly_processes = []
-
             self.ScannerBufferTraffic()
             self.ScannerBufferEvents()
 
-            if len(self.presumably_traffic) > 0 and len(self.presumably_events) > 0:
-                count_events = len(self.presumably_events)
+            for event in self.presumably_events:
+                _, _, _, _, anomal = event
+                if anomal and not (event in results["SuspiciousProcesses"]):
+                    results["SuspiciousProcesses"].append(event)
+                elif not anomal and not (event in results["SafeProcesses"]):
+                    results["SafeProcesses"].append(event)
 
-                for i in range(count_events):
-                    Time_Start_Flow, Time_End_Flow, Process_Name, \
-                        arr_ip_port, anomaly_proc = self.presumably_events[i]
+            for netflow in self.presumably_traffic:
+                _, _, _, _, _, _, anomal = netflow
+                if anomal and not (netflow in results["SuspiciousNetFlow"]):
+                    results["SuspiciousNetFlow"].append(netflow)
+                elif not anomal and not (netflow in results["SafeNetFlow"]):
+                    results["SafeNetFlow"].append(netflow)
 
-                    if anomaly_proc:
-                        Process = (Time_Start_Flow, Time_End_Flow, Process_Name, arr_ip_port)
-                        anomaly_processes.append(Process)
+            for event in results["SuspiciousProcesses"]:
+                _, _, Process_Name, arr_ip_port, _ = event
+                for ip_port in arr_ip_port:
+                    ip, port = ip_port
 
-                detection_RAT = False
-                for j in range(len(self.presumably_traffic)):
-                    Time_Start_Thread, Time_End_Thread, Src_IP_Flow, \
-                        Dst_IP_Flow, Src_Port_Flow, Dst_Port_Flow, anomaly_traffic = self.presumably_traffic[j]
+                    # if Process_Name == "RevengeRATServer.exe":
+                    #     print(f"{Process_Name}: {str(IPv4Address(ip))}, {port}")
 
-                    if anomaly_traffic:
-                        for process in anomaly_processes:
-                            Time_Start_Flow, Time_End_Flow, Process_Name, arr_ip_port = process
-                            if len(arr_ip_port) > 0:
-                                for ip_port in arr_ip_port:
-                                    ip, port = ip_port
+                    for netflow in results["SuspiciousNetFlow"]:
+                        Time_Stamp_Start, Time_Stamp_End, Src_IP_Flow, \
+                            Dst_IP_Flow, Src_Port_Flow, Dst_Port_Flow, _ = netflow
 
-                                    if (Src_IP_Flow == ip or Dst_IP_Flow == ip) and \
-                                            (Src_Port_Flow == port or Dst_Port_Flow == port):
-                                        if not Process_Name in interim_results:
-                                            interim_results[Process_Name] = 0
-                                        interim_results[Process_Name] += 1
-                                        detection_RAT = True
+                        if (ip == Src_IP_Flow or ip == Dst_IP_Flow) and \
+                           (port == Src_Port_Flow or port == Dst_Port_Flow):
+                            if not Process_Name in results["RAT_trojans"]:
+                                results["RAT_trojans"][Process_Name] = 0
+                            results["RAT_trojans"][Process_Name] += 1
 
-                            if not detection_RAT:
-                                if Process_Name in self.real_rat_process:
-                                    interim_results["NoRATDetectNoRight"] += 1
-                                else:
-                                    interim_results["NoRATDetectRight"] += 1
+            self.buffer_output["statistics"].clear()
+            for record in results:
+                self.buffer_output["statistics"][record] = results[record]
 
-                            if Process_Name in self.real_rat_process:
-                                interim_results["RATReal"] += 1
-                            else:
-                                interim_results["NoRATReal"] += 1
-
-                self.buffer_anomaly_proc.append(interim_results)
-
-                line = f"\n{index},{interim_results['NoRATDetectRight']},{interim_results['NoRATDetectNoRight']}," \
-                       f"{interim_results['RATDetectRight']},{interim_results['RATDetectNoRight']}," \
-                       f"{interim_results['NoRATReal']},{interim_results['RATReal']}," \
-                       f"{interim_results['NingaliNETServer.exe']}," \
-                       f"{interim_results['RabbitHoleServer.exe']}," \
-                       f"{interim_results['RevengeRATServer.exe']},"
-                OtherProcess = 0
-                for anomaly in interim_results:
-                    if anomaly == "browser.exe":
-                        OtherProcess += interim_results[anomaly]
-                line += str(OtherProcess)
-
-                file = open(self.res_file, "a")
-                file.write(line)
-                file.close()
-
-                index += 1
-
-            time.sleep(5)
+            time.sleep(1)

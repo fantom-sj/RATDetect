@@ -13,21 +13,23 @@ def main():
     path_procmon_config     = "ProcessEventAnalis\\ProcmonConfiguration.pmc"
 
     thread_time_limit       = 1 * 50 * HUNDREDS_OF_NANOSECONDS
-    charact_file_name       = "events_characters_"
     user_dir                = "Жертва"
+    max_len_buffer          = 20
 
     HOST        = "192.168.10.128"
     PORT        = 62301
     SERVER_HOST = "192.168.137.1"
     SERVER_PORT = 62302
+    cert        = "ca.crt"
 
-    sniffer = SnifferEventProc(size_pml_time, event_file_mask, path_procmon, path_procmon_config, path_event_analysis)
-    sniffer.start()
+    # sniffer = SnifferEventProc(size_pml_time, event_file_mask, path_procmon, path_procmon_config, path_event_analysis)
+    # sniffer.start()
 
-    analizator = AnalyzerEvents(thread_time_limit, charact_file_name, path_event_analysis, user_dir,
-                                HOST, PORT, SERVER_HOST, SERVER_PORT)
-    analizator.start()
+    analizator = AnalyzerEvents(thread_time_limit, path_event_analysis, user_dir, max_len_buffer,
+                                HOST, PORT, SERVER_HOST, SERVER_PORT, cert)
+    # analizator.start()
 
+    analizator.DirectProcessingEvents()
 
 if __name__ == '__main__':
     # elevate()

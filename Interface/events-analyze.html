@@ -5,6 +5,11 @@
     <title>Система мониторинга RAT-троянов</title>
     <script type="text/javascript" src="/eel.js"></script>
 
+    <script src="plugins/jquery/jquery.min.js"></script>
+    <script src="plugins/jquery-ui/jquery-ui.min.js"></script>
+
+    <script type="text/javascript" src="plugins/Chart.js/chart.umd.js"></script>
+
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
     <link rel="stylesheet" href="plugins/fontawesome-free/css/all.min.css">
     <link rel="stylesheet" href="plugins/fontawesome-free/css/font-awesome.css">
@@ -12,8 +17,8 @@
     <link rel="stylesheet" href="style/adminlte.css">
     <link rel="stylesheet" href="style/style.css">
 
-    <script src="plugins/jquery/jquery.min.js"></script>
-    <script src="plugins/jquery-ui/jquery-ui.min.js"></script>
+    <script src="js/script.js"></script>
+    <script type="text/javascript" src="js/chart_event_loss.js"></script>
 
     <script>
       $(function(){
@@ -43,16 +48,61 @@
         <!-- Сам контент-->
         <section class="content">
           <div class="container-fluid">
+            <div id="AnalyseProcessEvents">
 
+              <div id="diagramEventsParent" style="display: block; width: 100%; height: 320px; overflow-x: scroll;" >
+                <div class="chart-container" style="position: relative; height:100%; width:151vh;">
+                  <canvas id="diagramEvents" style="height:100%; width:100%"></canvas>
+                </div>
+              </div>
+
+
+              <table class="table">
+                <thead>
+                  <tr>
+                    <td>
+                      <table width="100%" > <!--height="40"-->
+                        <tr>
+                          <th width="5%">ID</th>
+                          <th width="20%">Время начала событий</th>
+                          <th width="25%">Время окончания событий</th>
+                          <th width="25%">Название процесса</th>
+                          <th width="25%">Сетевые соединения</th>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </thead>
+                <tbody scrollbars="yes">
+                <tr>
+                  <td>
+                    <div id="records">
+                      <table width="100%" id="results">
+                        <tbody></tbody>
+                      </table>
+                    </div>
+                  </td>
+                </tr>
+                </tbody>
+              </table>
+
+
+            </div>
           </div>
         </section>
       </div>
-
     </div>
 
     <script>
       $(window).on("load", function() {
         $("#event").addClass("active");
+        eel.SendDataCash("data_events");
+      });
+    </script>
+    <script>
+      $(window).on("load", function() {
+        console.log("Готово");
+        print_chart();
       });
     </script>
   </body>

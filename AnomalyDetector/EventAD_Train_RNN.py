@@ -5,9 +5,10 @@ from pathlib import Path
 from sklearn.ensemble import IsolationForest
 import pickle
 
+
 def main(versia, window_size, arhiteche):
     # Параметры датасета
-    batch_size          = 5
+    batch_size          = 1
     validation_factor   = 0.05
     feature_range       = (-1, 1)
 
@@ -29,7 +30,7 @@ def main(versia, window_size, arhiteche):
     path_model          = "modeles\\EventAnomalyDetector\\" + versia + "\\"
     model_name          = path_model + "model_EAD_v" + versia
     max_min_file        = path_model + "M&M_event.csv"
-    dataset             = "F:\\EVENT\\train\\train_dataset_0.csv"
+    dataset             = "F:\\DataSets\\Для выбора характеристик\\Для обучения\\train_megadataset_events.csv"
     history_name        = path_model + "history_train_v" + versia + ".csv"
     history_valid_name  = path_model + "history_valid_v" + versia + ".csv"
 
@@ -57,15 +58,48 @@ def main(versia, window_size, arhiteche):
     data = data.drop(["Events_Charact.Direction_IP_Port"], axis=1)
     data = data.drop(["Events_Charact.Count_Events_Batch"], axis=1)
     data = data.drop(["Events_Charact.Duration"], axis=1)
+
+    # Выявленные ненужные признаки:
+    data = data.drop(["Events_Charact.Count_Process_Defined"], axis=1)
+    data = data.drop(["Events_Charact.Count_Thread_Profile"], axis=1)
+    data = data.drop(["Events_Charact.Ratio_Receive_on_Accept"], axis=1)
+    data = data.drop(["Events_Charact.Ratio_Send_on_Accept"], axis=1)
+    data = data.drop(["OperationName.Accept"], axis=1)
+    data = data.drop(["OperationName.CreateMailSlot"], axis=1)
+    data = data.drop(["OperationName.CreatePipe"], axis=1)
+    data = data.drop(["OperationName.DeviceChange"], axis=1)
+    data = data.drop(["OperationName.DirectoryControl"], axis=1)
+    data = data.drop(["OperationName.InternalDeviceIoControl"], axis=1)
+    data = data.drop(["OperationName.LockUnlockFile"], axis=1)
+    data = data.drop(["OperationName.PlugAndPlay"], axis=1)
+    data = data.drop(["OperationName.QueryFileQuota"], axis=1)
+    data = data.drop(["OperationName.QueryInformationFile"], axis=1)
+    data = data.drop(["OperationName.RenameKey"], axis=1)
+    data = data.drop(["OperationName.SetFileQuota"], axis=1)
+    data = data.drop(["OperationName.SetInformationFile"], axis=1)
+    data = data.drop(["OperationName.SetVolumeInformation"], axis=1)
+    data = data.drop(["OperationName.VolumeDismount"], axis=1)
+    data = data.drop(["OperationName.VolumeMount"], axis=1)
+    data = data.drop(["Events_Charact.Appeal_reg_HKCC"], axis=1)
+    data = data.drop(["Events_Charact.Speed_Read_Data"], axis=1)
+    data = data.drop(["Events_Charact.Speed_Write_Data"], axis=1)
+    data = data.drop(["OperationName.FlushKey"], axis=1)
+    data = data.drop(["OperationName.LoadKey"], axis=1)
+    data = data.drop(["OperationName.QueryVolumeInformation"], axis=1)
+    data = data.drop(["OperationName.SetEAFile"], axis=1)
+    data = data.drop(["OperationName.SetKeySecurity"], axis=1)
+    data = data.drop(["OperationName.UnloadKey"], axis=1)
+    data = data.drop(["OperationName.SystemControl"], axis=1)
     print("Загрузка датасета завершена.")
 
     training_dataset = TrainingDatasetGen(data, max_min_file, feature_range, checkpoint_epoch,
                                           batch_size, window_size, validation_factor)
-    print(training_dataset.numbs_count, training_dataset.caracts_count)
+    print(training_dataset.numbs_count, training_dataset.characts_count)
+
     print("Обучающий датасет создан.")
 
-    autoencoder = Autoencoder(training_dataset.caracts_count, arhiteche, window_size)
-    autoencoder.build((1, window_size, training_dataset.caracts_count))
+    autoencoder = Autoencoder(training_dataset.characts_count, arhiteche, window_size)
+    autoencoder.build((1, window_size, training_dataset.characts_count))
     autoencoder.summary()
     autoencoder.encoder_model.summary()
     autoencoder.decoder_model.summary()
@@ -77,9 +111,9 @@ def main(versia, window_size, arhiteche):
     #     staircase=staircase
     # )
 
-    # optimizer = keras.optimizers.Adam(learning_rate=lr_schedule)
+    optimizer = keras.optimizers.Adam(learning_rate=0.0001)
 
-    autoencoder.compile(optimizer="adam", loss=loss_func)
+    autoencoder.compile(optimizer=optimizer, loss=loss_func)
     print("Автоэнкодер определён.")
 
     if continue_education:
@@ -98,23 +132,24 @@ def main(versia, window_size, arhiteche):
     pd.DataFrame(autoencoder.history_loss).to_csv(history_name, index=False)
     pd.DataFrame(autoencoder.history_valid).to_csv(history_valid_name, index=False)
 
-    anomalyDetector = IsolationForest()
-    noAnomaly = []
-    for idx in range(len(autoencoder.history_valid["epoch"])):
-        if autoencoder.history_valid["epoch"][idx] == 2:
-            noAnomaly.append(autoencoder.history_valid["loss"][idx])
-    anomalyDetector.fit(noAnomaly)
-
-    with open("modeles\\TrafficAnomalyDetector\\" + versia + "\\anomalyDetector", "wb") as model_file:
-        pickle.dump(anomalyDetector, model_file)
+    # anomalyDetector = IsolationForest()
+    # noAnomaly = []
+    # for idx in range(len(autoencoder.history_valid["epoch"])):
+    #     if autoencoder.history_valid["epoch"][idx] == 2:
+    #         noAnomaly.append(autoencoder.history_valid["loss"][idx])
+    # anomalyDetector.fit(noAnomaly)
+    #
+    # with open("modeles\\TrafficAnomalyDetector\\" + versia + "\\anomalyDetector", "wb") as model_file:
+    #     pickle.dump(anomalyDetector, model_file)
 
 
 if __name__ == '__main__':
-    versia = "0.6.1"
+    versia = "0.7.0"
     window_size = 1
 
-    encoder = {"1_Input": (window_size, 119), "2_LSTM_seq": (60, 112), "3_LSTM_seq": (30, 60), "4_LSTM": (15, 30)}
-    decoder = {"5_RepeatVector": (window_size, None), "6_LSTM_seq": (30, 15), "7_LSTM_seq": (60, 30), "8_LSTM": (119, 60)}
+    encoder = {"1_Input": (window_size, 89), "2_LSTM_seq": (70, 89), "3_LSTM_seq": (50, 70), "4_LSTM": (25, 50)}
+    decoder = {"5_RepeatVector": (window_size, None), "6_LSTM_seq": (50, 25),
+               "7_LSTM_seq": (70, 50), "8_LSTM": (89, 70)}
 
     arhiteche = (encoder, decoder)
     print("\n\n" + versia)

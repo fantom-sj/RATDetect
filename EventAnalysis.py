@@ -49,7 +49,7 @@ class EventAnalyser(Thread):
         self.batch_size     = 1
         self.window_size    = 1
         self.loss_func      = keras.losses.mse
-        self.max_min_file   = "AnomalyDetector\\modeles\\EventAnomalyDetector\\0.6.0\\M&M_event.csv"
+        self.max_min_file   = "AnomalyDetector\\modeles\\EventAnomalyDetector\\0.7.0\\M&M_event.csv"
         self.feature_range  = (-1, 1)
 
         self.context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -59,16 +59,49 @@ class EventAnalyser(Thread):
         self.threads_collector  = dict()
 
     def NeiroAnalyze(self, characts):
-        characts_new = characts[characts[Events_Charact.Process_Name] != "python.exe"]
-        characts_new.sort_values(by=Events_Charact.Time_Stamp_End)
+        characts_new = characts[characts["Events_Charact.Process_Name"] != "python.exe"]
+        characts_new.sort_values(by="Events_Charact.Time_Stamp_End")
 
-        characts_pd = characts_new.drop([Events_Charact.Time_Stamp_Start], axis=1)
-        characts_pd = characts_pd.drop([Events_Charact.Time_Stamp_End], axis=1)
-        characts_pd = characts_pd.drop([Events_Charact.Process_Name], axis=1)
-        characts_pd = characts_pd.drop([Events_Charact.Direction_IP_Port], axis=1)
-        characts_pd = characts_pd.drop([Events_Charact.Count_Events_Batch], axis=1)
-        characts_pd = characts_pd.drop([Events_Charact.Duration], axis=1)
-        caracts_numpy = TrainingDatasetGen.normalization(characts_pd, self.max_min_file, self.feature_range,
+        characts_pd = characts_new.drop(["Events_Charact.Time_Stamp_Start"], axis=1)
+        characts_pd = characts_pd.drop(["Events_Charact.Time_Stamp_End"], axis=1)
+        characts_pd = characts_pd.drop(["Events_Charact.Process_Name"], axis=1)
+        characts_pd = characts_pd.drop(["Events_Charact.Direction_IP_Port"], axis=1)
+        characts_pd = characts_pd.drop(["Events_Charact.Count_Events_Batch"], axis=1)
+        characts_pd = characts_pd.drop(["Events_Charact.Duration"], axis=1)
+
+        # Выявленные ненужные признаки:
+        data = characts_pd.drop(["Events_Charact.Count_Process_Defined"], axis=1)
+        data = data.drop(["Events_Charact.Count_Thread_Profile"], axis=1)
+        data = data.drop(["Events_Charact.Ratio_Receive_on_Accept"], axis=1)
+        data = data.drop(["Events_Charact.Ratio_Send_on_Accept"], axis=1)
+        data = data.drop(["OperationName.Accept"], axis=1)
+        data = data.drop(["OperationName.CreateMailSlot"], axis=1)
+        data = data.drop(["OperationName.CreatePipe"], axis=1)
+        data = data.drop(["OperationName.DeviceChange"], axis=1)
+        data = data.drop(["OperationName.DirectoryControl"], axis=1)
+        data = data.drop(["OperationName.InternalDeviceIoControl"], axis=1)
+        data = data.drop(["OperationName.LockUnlockFile"], axis=1)
+        data = data.drop(["OperationName.PlugAndPlay"], axis=1)
+        data = data.drop(["OperationName.QueryFileQuota"], axis=1)
+        data = data.drop(["OperationName.QueryInformationFile"], axis=1)
+        data = data.drop(["OperationName.RenameKey"], axis=1)
+        data = data.drop(["OperationName.SetFileQuota"], axis=1)
+        data = data.drop(["OperationName.SetInformationFile"], axis=1)
+        data = data.drop(["OperationName.SetVolumeInformation"], axis=1)
+        data = data.drop(["OperationName.VolumeDismount"], axis=1)
+        data = data.drop(["OperationName.VolumeMount"], axis=1)
+        data = data.drop(["Events_Charact.Appeal_reg_HKCC"], axis=1)
+        data = data.drop(["Events_Charact.Speed_Read_Data"], axis=1)
+        data = data.drop(["Events_Charact.Speed_Write_Data"], axis=1)
+        data = data.drop(["OperationName.FlushKey"], axis=1)
+        data = data.drop(["OperationName.LoadKey"], axis=1)
+        data = data.drop(["OperationName.QueryVolumeInformation"], axis=1)
+        data = data.drop(["OperationName.SetEAFile"], axis=1)
+        data = data.drop(["OperationName.SetKeySecurity"], axis=1)
+        data = data.drop(["OperationName.UnloadKey"], axis=1)
+        data = data.drop(["OperationName.SystemControl"], axis=1)
+
+        caracts_numpy = TrainingDatasetGen.normalization(data, self.max_min_file, self.feature_range,
                                                          True)
         characts_dt    = characts_new.to_dict("list")
 
@@ -78,7 +111,7 @@ class EventAnalyser(Thread):
         print("Начинаем прогнозирование аномальных событий.")
         metric_loss = None
 
-        # progress_bar = Progbar(batch_count, stateful_metrics=["Расхождение"])
+        progress_bar = Progbar(batch_count, stateful_metrics=["Расхождение"])
 
         for idx in range(0, batch_count, 1):
             batch_x = []
@@ -97,12 +130,12 @@ class EventAnalyser(Thread):
                 mean_loss = tf.math.reduce_mean(
                     loss)  # tf.math.multiply(tf.math.reduce_mean(loss), tf.constant(1, dtype=tf.float32))
                 values = [("Расхождение", mean_loss)]
-                # progress_bar.add(1, values=values)
+                progress_bar.add(1, values=values)
 
-                self.buffer.append((characts_dt[Events_Charact.Time_Stamp_Start][idx],
-                                    characts_dt[Events_Charact.Time_Stamp_End][idx],
-                                    characts_dt[Events_Charact.Process_Name][idx],
-                                    characts_dt[Events_Charact.Direction_IP_Port][idx],
+                self.buffer.append((characts_dt["Events_Charact.Time_Stamp_Start"][idx],
+                                    characts_dt["Events_Charact.Time_Stamp_End"][idx],
+                                    characts_dt["Events_Charact.Process_Name"][idx],
+                                    characts_dt["Events_Charact.Direction_IP_Port"][idx],
                                     float(metric_loss[idx])
                                     ))
 
@@ -133,19 +166,34 @@ class EventAnalyser(Thread):
             with open(self.log_file, "w") as f:     # sys.stdout
                 print("Поток анализа событий процессов запущен!")
 
-                for name_device in self.protected_devices:
-                    self.characts[name_device] = list()
-                    self.threads_collector[name_device] = Thread(target=self.data_collector, args=(name_device,
-                                                                    self.protected_devices[name_device],))
-                    self.threads_collector[name_device].start()
+                events_pd = pd.read_csv("D:\\Пользователи\\Admin\\Рабочий стол\\"
+                                        "Статья по КБ\\RATDetect\\WorkDirectory\\events_characts.csv")
+                self.NeiroAnalyze(events_pd)
 
                 while True:
-                    for name_device in self.characts:
-                        characts_data = copy.copy(self.characts[name_device])
-
-                        if len(characts_data) > 0:
-                            self.characts[name_device].clear()
-                            # print(characts_data[0])
-                            # print(type(characts_data[0]))
-                            self.NeiroAnalyze(characts_data[0])
                     time.sleep(1)
+
+                # for name_device in self.protected_devices:
+                #     self.characts[name_device] = list()
+                #     self.threads_collector[name_device] = Thread(target=self.data_collector, args=(name_device,
+                #                                                     self.protected_devices[name_device],))
+                #     self.threads_collector[name_device].start()
+                #
+                # file_ch = "WorkDirectory\\events_characts_"
+                # idx     = 0
+                # while True:
+                #     for name_device in self.characts:
+                #         characts_data = copy.copy(self.characts[name_device])
+                #
+                #         if len(characts_data) > 0:
+                #             self.characts[name_device].clear()
+                #
+                #             file_name = file_ch + str(idx) + ".csv"
+                #             characts_data[0].to_csv(file_name, index=False)
+                #             idx += 1
+                #             print(f"Файл: {file_name} сохранён")
+                #
+                #             # print(characts_data[0])
+                #             # print(type(characts_data[0]))
+                #             # self.NeiroAnalyze(characts_data[0])
+                #     time.sleep(1)
