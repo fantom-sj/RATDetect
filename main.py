@@ -1,22 +1,17 @@
-from EventAnalysis import EventAnalyser
 from TrafficAnalysis import TrafficAnalyser
 from DecisionSystem import DecisionSystem
+from EventAnalysis import EventAnalyser
+from AuxiliaryFunctions import logingProcess
+from index import interface
 
-from contextlib import redirect_stdout
 from ipaddress import IPv4Address
 from tensorflow import keras
-from threading import Thread
-from index import interface
-from elevate import elevate
 from pathlib import Path
 
+import jsonpickle as json
 import tensorflow as tf
-import matplotlib.pyplot as plt
 import logging
 import time
-import json
-import sys
-import os
 
 
 def NeiroNetLoad(path_net_traffic, path_net_event):
@@ -43,9 +38,7 @@ def NeiroNetLoad(path_net_traffic, path_net_event):
 if __name__ == '__main__':
     interface.start()
 
-    # elevate()
-
-    path_net_traffic = "AnomalyDetector\\modeles\\TrafficAnomalyDetector\\1.1\\model_TAD_v1.1"
+    path_net_traffic = "AnomalyDetector\\modeles\\TrafficAnomalyDetector\\1.6.4\\model_TAD_v1.6.4"
     path_net_event   = "AnomalyDetector\\modeles\\EventAnomalyDetector\\0.7.0\\model_EAD_v0.7.0"
 
     path_traffic_analysis = "WorkDirectory\\"
@@ -66,18 +59,65 @@ if __name__ == '__main__':
     buffer_output       = dict()
 
     traffic_analysis = TrafficAnalyser(buffer_traffic, NetTraffic, path_traffic_analysis,
-                                       iface_name, ip_client)
+                                       iface_name, ip_client, window_size=10)
 
     event_analysis = EventAnalyser(buffer_events, NetEvent, protected_devices)
 
-    decision_system = DecisionSystem(buffer_traffic, buffer_events, buffer_output)
+    decision_system = DecisionSystem(ip_client, buffer_traffic, buffer_events, buffer_output)
 
-    traffic_analysis.start()
-    event_analysis.start()
-    decision_system.start()
-
+    print("Ожидаем запуск системы мониторинга AntiRAT...")
     while True:
-        buffer_output_json = json.dumps(buffer_output)
+        if interface.process_monitor:
+            if not traffic_analysis.is_alive():
+                traffic_analysis.run_toggle = True
+                try:
+                    traffic_analysis.start()
+                except RuntimeError:
+                    traffic_analysis = TrafficAnalyser(buffer_traffic, NetTraffic, path_traffic_analysis,
+                                                       iface_name, ip_client, window_size=10)
+                    traffic_analysis.run_toggle = True
+                    traffic_analysis.start()
+
+            if not event_analysis.is_alive():
+                event_analysis.run_toggle   = True
+                try:
+                    event_analysis.start()
+                except RuntimeError:
+                    event_analysis = EventAnalyser(buffer_events, NetEvent, protected_devices)
+                    event_analysis.run_toggle = True
+                    event_analysis.start()
+
+            if not decision_system.is_alive():
+                decision_system.run_toggle  = True
+                try:
+                    decision_system.start()
+                except RuntimeError:
+                    decision_system = DecisionSystem(ip_client, buffer_traffic, buffer_events, buffer_output)
+                    decision_system.run_toggle = True
+                    decision_system.start()
+
+        else:
+            if traffic_analysis.is_alive():
+                traffic_analysis.run_toggle = False
+            if event_analysis.is_alive():
+                event_analysis.run_toggle   = False
+            if decision_system.is_alive():
+                decision_system.run_toggle  = False
+                print("Процесс системы мониторинга AntiRAT приостановлен!")
+            time.sleep(0.5)
+            continue
+
+        if interface.type_data == "data_analys_res":
+            buffer_json = json.dumps(buffer_output["AnalysisResults"])
+        elif interface.type_data == "data_events":
+            buffer_json = json.dumps(buffer_output["events"])
+        elif interface.type_data == "data_netflow":
+            buffer_json = json.dumps(buffer_output["traffic"])
+        else:
+            buffer_json = None
+
+        interface.SendinData(buffer_json)
+        logingProcess(buffer_output["events"], buffer_output["traffic"])
 
         for record in buffer_output["traffic"]:
             interface.data_cash["traffic"].append(record)
@@ -87,14 +127,17 @@ if __name__ == '__main__':
             interface.data_cash["events"].append(record)
         buffer_output["events"].clear()
 
-        if len(buffer_output["statistics"]) > 0:
-            print("\n---------------------------------------")
-            print(f"{'RAT_trojans'}: {buffer_output['statistics']['RAT_trojans']}")
-            print(f"{'CorrectDetectSafeProcesses'}: {buffer_output['statistics']['CorrectDetectSafeProcesses']}")
-            print(f"{'NoCorrectDetectSafeProcesses'}: {buffer_output['statistics']['NoCorrectDetectSafeProcesses']}")
-            print(f"{'CorrectDetectRAT_Trojans'}: {buffer_output['statistics']['CorrectDetectRAT_Trojans']}")
-            print(f"{'NoCorrectDetectRAT_Trojans'}: {buffer_output['statistics']['NoCorrectDetectRAT_Trojans']}\n")
+        interface.data_cash["analiz_res"] = buffer_output["AnalysisResults"]
 
-        interface.SendinData(buffer_output_json)
+        print("\n\n----------------------------------------")
+        print(f"Правильно определённые безопасные процессы: "
+              f"{buffer_output['statistics']['CorrectDetectSafeProcesses']}")
+        print(f"Ошибочно определённые безопасные процессы: "
+              f"{buffer_output['statistics']['NoCorrectDetectSafeProcesses']}")
+        print(f"Правильно определённые RAT-трояны: "
+              f"{buffer_output['statistics']['CorrectDetectRAT_Trojans']}")
+        print(f"Ошибочно определённые безопасные RAT-трояны: "
+              f"{buffer_output['statistics']['NoCorrectDetectRAT_Trojans']}")
+        print("----------------------------------------\n")
 
-        time.sleep(1)
+        time.sleep(3)

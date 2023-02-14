@@ -14,7 +14,7 @@ def main():
 
     thread_time_limit       = 1 * 50 * HUNDREDS_OF_NANOSECONDS
     user_dir                = "Жертва"
-    max_len_buffer          = 20
+    max_len_buffer          = 1000
 
     HOST        = "192.168.10.128"
     PORT        = 62301
@@ -27,9 +27,9 @@ def main():
 
     analizator = AnalyzerEvents(thread_time_limit, path_event_analysis, user_dir, max_len_buffer,
                                 HOST, PORT, SERVER_HOST, SERVER_PORT, cert)
-    # analizator.start()
+    analizator.start()
 
-    analizator.DirectProcessingEvents()
+    # analizator.DirectProcessingEvents("train_characts_events")
 
 if __name__ == '__main__':
     # elevate()

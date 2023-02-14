@@ -17,7 +17,7 @@
     <link rel="stylesheet" href="style/adminlte.css">
     <link rel="stylesheet" href="style/style.css">
 
-    <script src="js/script.js"></script>
+    <script type="text/javascript" src="js/script.js"></script>
     <script type="text/javascript" src="js/chart_event_loss.js"></script>
 
     <script>
@@ -38,9 +38,20 @@
         <div class="content-header">
           <div class="container-fluid">
             <div class="row mb-2">
-              <div class="col-sm-6">
+              <div class="col-sm-6" style="max-width:40%  !important;">
                 <h1 class="m-0">Анализ событий процессов</h1>
               </div>
+
+              <span class="select-fixff">
+                Количество записей
+                <select placeholder="Количество записей" id="count_records">
+                  <option value="all">Все</option>
+                  <option value="100" >100</option>
+                  <option value="1000">1000</option>
+                  <option value="2500">2500</option>
+                  <option value="5000">5000</option>
+                </select>
+              </span>
             </div>
           </div>
         </div>
@@ -50,12 +61,11 @@
           <div class="container-fluid">
             <div id="AnalyseProcessEvents">
 
-              <div id="diagramEventsParent" style="display: block; width: 100%; height: 320px; overflow-x: scroll;" >
+              <div id="diagramEventsParent" style="display: block; width: 100%; height: 320px; #overflow-x: scroll;" >
                 <div class="chart-container" style="position: relative; height:100%; width:151vh;">
                   <canvas id="diagramEvents" style="height:100%; width:100%"></canvas>
                 </div>
               </div>
-
 
               <table class="table">
                 <thead>
@@ -86,7 +96,6 @@
                 </tbody>
               </table>
 
-
             </div>
           </div>
         </section>
@@ -95,13 +104,28 @@
 
     <script>
       $(window).on("load", function() {
+        type_data = "data_events";
         $("#event").addClass("active");
-        eel.SendDataCash("data_events");
-      });
-    </script>
-    <script>
-      $(window).on("load", function() {
-        console.log("Готово");
+
+        $('#count_records').change(function () {
+            var optionSelected = $(this).find("option:selected");
+            var valueSelected  = optionSelected.val();
+
+            if (valueSelected == "all")
+              max_records = 0;
+            else if (valueSelected == "100")
+              max_records = 100;
+            else if (valueSelected == "1000")
+              max_records = 1000;
+            else if (valueSelected == "2500")
+              max_records = 2500;
+            else if (valueSelected == "5000")
+              max_records = 5000;
+
+            eel.SendMaxRecords(valueSelected);
+         });
+
+        eel.SendDataCash(type_data);
         print_chart();
       });
     </script>

@@ -12,7 +12,7 @@ import socket
 import struct
 import time
 import ssl
-import math
+import os
 
 
 class ProcessThread:
@@ -204,9 +204,16 @@ class AnalyzerEvents(Thread):
             pbar.update(1)
         pbar.close()
 
-        path_new = self.path_name + "\\" + "Обработанные файлы"
-        file_only_name = file_name.split("\\")[-1]
-        Path(file_name).rename(path_new + "\\" + file_only_name)
+        try:
+            Path(file_name).unlink()
+        except PermissionError:
+            if Path(file_name).exists():
+                os.close(file_name)
+                Path(file_name).unlink()
+
+        # path_new = self.path_name + "\\" + "Обработанные файлы"
+        # file_only_name = file_name.split("\\")[-1]
+        # Path(file_name).rename(path_new + "\\" + file_only_name)
 
     def ProcessingEvents(self, arr_pml_file=None):
         if not arr_pml_file is None:
@@ -244,7 +251,7 @@ class AnalyzerEvents(Thread):
                     continue
                 else:
                     thread = self.ProcessThreads_obj.threads[nameThread].events[timeThread]
-                    threadCharacts = CulcCharactsEventsOnWindow(thread, self.user_dir)
+                    threadCharacts = CulcCharactsEventsOnWindow(thread, self.user_dir, HOST_IP = self.HOST)
                     self.ProcessThreads_obj.delThread(nameThread, timeThread)
                     array_characts.append(threadCharacts)
 

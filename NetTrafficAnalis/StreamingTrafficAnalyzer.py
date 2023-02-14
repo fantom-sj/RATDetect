@@ -6,6 +6,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 import subprocess as sp
+import psutil, os
 import pandas as pd
 
 import logging
@@ -115,13 +116,27 @@ class SnifferTraffic(Thread):
         self.th_main_sniff  = None
         self.run_sniff      = False
 
+        self.timeout = 10
+        self.prog    = None
+
     def __SniffPackets__(self, file_name):
-        sniffer = [self.path_tshark, "-c", str(self.pcap_length), "-w", file_name]
+        sniffer = [self.path_tshark, "-a", f"duration:{self.timeout}",  "-c", str(self.pcap_length), "-w", file_name]
         CREATE_NO_WINDOW = 0x08000000
         if self.iface:
             sniffer.append("-i " + str(self.iface))
-        prog = sp.Popen(sniffer, creationflags=CREATE_NO_WINDOW)
-        prog.communicate()
+        self.prog = sp.Popen(sniffer, creationflags=CREATE_NO_WINDOW)
+        self.prog.communicate()
+
+    @staticmethod
+    def kill_proc_tree(pid, including_parent=True):
+        parent = psutil.Process(pid)
+        children = parent.children(recursive=True)
+        for child in children:
+            child.kill()
+        gone, still_alive = psutil.wait_procs(children, timeout=1)
+        if including_parent:
+            parent.kill()
+            parent.wait(1)
 
     def GetNumberIface(self):
         get_ifaces = [self.path_tshark, "-D"]
@@ -164,9 +179,10 @@ class SnifferTraffic(Thread):
 
             # Получение индексов файлов с трафиком
             for file_name in file_arr:
-                index = file_name.find(self.trffic_file_mask)
-                index_file = [int(s) for s in re.split('_|.p', file_name[index:]) if s.isdigit()][0]
-                indexs_files_pcapng.append(index_file)
+                if ".pcap" in file_name:
+                    index = file_name.find(self.trffic_file_mask)
+                    index_file = [int(s) for s in re.split('_|.p', file_name[index:]) if s.isdigit()][0]
+                    indexs_files_pcapng.append(index_file)
 
             indexs_files_pcapng.sort()
 
@@ -185,7 +201,7 @@ class SnifferTraffic(Thread):
 
             self.last_file_id += 1
             while True:
-                traffic_file = f"{self.path_name}\\{self.trffic_file_mask}{self.last_file_id}.pcapng"
+                traffic_file = f"{self.path_name}{self.trffic_file_mask}{self.last_file_id}.pcapng"
                 traffic_file_tmp = f"{self.path_name}\\tmp\\{self.trffic_file_mask}{self.last_file_id}.pcapng"
 
                 try:
@@ -254,7 +270,11 @@ class AnalyzerPackets(Thread):
         return len(self.files_traffic_arr)
 
     def GetLastFileId(self):
-        path_home = Path(self.path_name)
+        path_home = Path(self.path_name + "\\" + "Обработанные файлы")
+        if not path_home.exists():
+            self.index_charact_file = -1
+            return
+
         file_arr = []
 
         for file in path_home.iterdir():
@@ -286,6 +306,12 @@ class AnalyzerPackets(Thread):
             bar.update(1)
         bar.close()
 
+        try:
+            Path(file_name).unlink()
+        except PermissionError:
+            if Path(file_name).exists():
+                os.close(file_name)
+                Path(file_name).unlink()
         # path_new = self.path_name + "\\" + "Обработанные файлы"
         # if not Path(path_new).exists():
         #     Path(path_new).mkdir()
@@ -367,15 +393,16 @@ class AnalyzerPackets(Thread):
                     try:
                         self.ProcessingTraffic(self.files_traffic_arr)
                         self.files_traffic_arr.clear()
-                    except IndexError:
+                    except IndexError as err:
+                        logging.exception(err)
                         continue
-                return
+
         else:
             print("Директория с трафиком для анализа не существует, видимо процесс сбора трафика не был запущен ранее!")
 
 
 if __name__ == '__main__':
-    path_name = "F:\\DataSets\\TRAFFIC\\Браузеры\\"
+    path_name = "D:\\Пользователи\\Admin\\Рабочий стол\\Статья по КБ\\RATDetect\\WorkDirectory\\"
 
     # Параметры сборщика трафика
     # size_pcap_length  = 10000
@@ -387,14 +414,14 @@ if __name__ == '__main__':
     # sniffer.start()
 
     # Параметры анализатора трафика
-    flow_time_limit         = 1 * 60 * HUNDREDS_OF_NANOSECONDS
+    flow_time_limit         = 1 * 30 * HUNDREDS_OF_NANOSECONDS
     traffic_waiting_time    = 200
     charact_file_length     = 10000000000
 
     # charact_file_name       = "traffic_brousrs_"
 
-    # ip_client               = [IPv4Address("192.168.10.128")]
-    ip_client               = [IPv4Address("192.168.0.144")]
+    ip_client               = [IPv4Address("192.168.10.128")]
+    # ip_client               = [IPv4Address("192.168.0.144")]
 
     # charact_file_name     = "nonvpn_rsync"
     # VNAT клиенты

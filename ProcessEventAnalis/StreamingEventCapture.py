@@ -29,14 +29,27 @@ class SnifferEventProc(Thread):
     def __StartProcmonSniff__(self, event_file):
         file_temp_name = f"{self.tepm_path}\\{event_file}"
 
-        procmon = [self.path_procmon, "/BackingFile", file_temp_name,
-                   "/Runtime", str(self.size_pml_time), "/Minimized",
-                   "/LoadConfig", self.path_procmon_config]
+        # procmon = [self.path_procmon, "/BackingFile", file_temp_name,
+        #            "/Runtime", str(self.size_pml_time), "/Minimized",
+        #            "/LoadConfig", self.path_procmon_config]
+        #
+        # startupinfo = sp.STARTUPINFO()
+        # startupinfo.dwFlags |= sp.STARTF_USESHOWWINDOW
+        #
+        # prog = sp.Popen(procmon, startupinfo=startupinfo)
+        # prog.communicate()
 
-        startupinfo = sp.STARTUPINFO()
-        startupinfo.dwFlags |= sp.STARTF_USESHOWWINDOW
+        procmon = f'CreateObject("WScript.Shell").Run """{self.path_procmon}"" /AcceptEula /BackingFile ' \
+                  f'""{file_temp_name}"" /Runtime {str(self.size_pml_time)} /LoadConfig ' \
+                  f'""{self.path_procmon_config}"" /Quiet", 0, true'
 
-        prog = sp.Popen(procmon, startupinfo=startupinfo)
+        file_vbs = "ProcessEventAnalis\\procmon.vbs"
+        with open(file_vbs, "w") as file:
+            file.write(procmon)
+
+        CREATE_NO_WINDOW = 0x08000000
+
+        prog = sp.Popen("cscript ProcessEventAnalis\\procmon.vbs", creationflags=CREATE_NO_WINDOW)
         prog.communicate()
 
         Path(file_temp_name).rename(f"{self.path_name}\\{event_file}")

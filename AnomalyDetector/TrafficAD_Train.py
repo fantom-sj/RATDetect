@@ -16,18 +16,17 @@ def main(versia, arhiteche, window_size):
     # staircase           = True
 
     # Параметры нейронной сети
-    epochs              = 3
-    continue_education  = False
-    checkpoint          = None
-    checkpoint_epoch    = 0
-    shaffle             = False
+    epochs              = 8
+    continue_education  = True
+    checkpoint          = 5
+    shaffle             = True
     loss_func           = keras.losses.mse
     arhiteche           = arhiteche
     versia              = versia
     path_model          = "modeles\\TrafficAnomalyDetector\\" + versia + "\\"
     model_name          = path_model + "model_TAD_v" + versia
     max_min_file        = path_model + "M&M_traffic_VNAT.csv"
-    dataset             = "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\train_megadataset_traffic.csv"
+    dataset             = "D:\\train_characts_traffic_2.csv"
     history_name        = path_model + "history_train_v" + versia + ".csv"
     history_valid_name  = path_model + "history_valid_v" + versia + ".csv"
 
@@ -53,23 +52,15 @@ def main(versia, arhiteche, window_size):
     print(f"Загружено {len(data)} характеристик")
     data = data.sort_values(by="Flow_Charact.Time_Stamp_Start")
 
-    data = data.drop(["Flow_Charact.Time_Stamp_Start"], axis=1)
-    data = data.drop(["Flow_Charact.Time_Stamp_End"], axis=1)
-
-    # data = data.drop(["Flow_Charact.Src_IP_Flow"], axis=1)
-    # data = data.drop(["Flow_Charact.Dst_IP_Flow"], axis=1)
-    # data = data.drop(["Flow_Charact.Src_Port_Flow"], axis=1)
-    # data = data.drop(["Flow_Charact.Dst_Port_Flow"], axis=1)
-
     # Выявленные ненужные признаки:
-    data = data.drop(["Flow_Charact.Len_Headers_Fwd"], axis=1)
-    data = data.drop(["Flow_Charact.Std_Len_Fwd_Packets"], axis=1)
+    # data = data.drop(["Flow_Charact.Len_Headers_Fwd"], axis=1)
+    # data = data.drop(["Flow_Charact.Std_Len_Fwd_Packets"], axis=1)
     data = data.drop(["Flow_Charact.Count_Flags_URG"], axis=1)
     data = data.drop(["Flow_Charact.Count_Flags_URG_Bwd"], axis=1)
     data = data.drop(["Flow_Charact.Count_Flags_URG_Fwd"], axis=1)
-    data = data.drop(["Flow_Charact.Std_Active_Time_Flow"], axis=1)
-    data = data.drop(["Flow_Charact.Std_InActive_Time_Flow"], axis=1)
-    data = data.drop(["Flow_Charact.Std_Time_Diff_Fwd_Pkts"], axis=1)
+    # data = data.drop(["Flow_Charact.Std_Active_Time_Flow"], axis=1)
+    # data = data.drop(["Flow_Charact.Std_InActive_Time_Flow"], axis=1)
+    # data = data.drop(["Flow_Charact.Std_Time_Diff_Fwd_Pkts"], axis=1)
 
     # print(data.to_dict("records"))
     print("Загрузка датасета завершена.")
@@ -98,7 +89,7 @@ def main(versia, arhiteche, window_size):
     print("Автоэнкодер определён.")
 
     if continue_education:
-        checkpoint_name = "modeles\\TrafficAnomalyDetector\\" + versia + "\\Checkpoint\\epoch_" + str(checkpoint)
+        checkpoint_name = "modeles\\TrafficAnomalyDetector\\" + versia + "\\Checkpoint\\" + str(checkpoint)
         autoencoder.load_weights(checkpoint_name)
         print("Продолжаем обучение:")
     else:
@@ -107,7 +98,7 @@ def main(versia, arhiteche, window_size):
 
     autoencoder.education(training_dataset, epochs=epochs, shaffle=shaffle,
                           model_checkname=path_model + "Checkpoint\\", versia=versia,
-                          path_model=path_model, checkpoint=checkpoint)
+                          path_model=path_model, checkpoint=checkpoint_epoch)
     autoencoder.save(model_name)
 
     pd.DataFrame(autoencoder.history_loss).to_csv(history_name, index=False)
@@ -115,14 +106,14 @@ def main(versia, arhiteche, window_size):
 
 
 if __name__ == '__main__':
-    versia = "1.3"
+    versia = "1.6.4"
 
     window_size = 10
 
-    encoder = {"1_Input": (window_size, 51), "2_GRU_seq": (43, 51), "3_GRU_seq": (35, 43),
-               "4_GRU_seq": (27, 35), "5_GRU_seq": (19, 27), "6_GRU_seq": (11, 19)}
-    decoder = {"7_Input": (window_size, 11), "8_GRU_seq": (19, 11), "9_GRU_seq": (27, 19),
-               "10_GRU_seq": (35, 27), "11_GRU_seq": (43, 35), "12_GRU_seq": (51, 43)}
+    encoder = {"1_Input": (window_size, 56), "2_GRU_seq": (45, 56), "3_GRU_seq": (35, 45),
+               "4_GRU_seq": (30, 35), "5_GRU_seq": (25, 30), "6_GRU_seq": (20, 25)}
+    decoder = {"7_Input": (window_size, 20), "8_GRU_seq": (25, 20), "9_GRU_seq": (30, 25),
+               "10_GRU_seq": (35, 30), "11_GRU_seq": (45, 35), "12_GRU_seq": (56, 45)}
     # "6_RepeatVector": (window_size, None),
 
     arhiteche = (encoder, decoder)
@@ -130,3 +121,18 @@ if __name__ == '__main__':
 
     with tf.name_scope("NetTraffic") as scope:
         main(versia, arhiteche, window_size)
+
+    # path_net_traffic = f"modeles\\TrafficAnomalyDetector\\{versia}\\Checkpoint\\epoch_5"
+    #
+    # autoencoder = Autoencoder(56, arhiteche, window_size, 1)
+    # autoencoder.build((1, window_size, 56))
+    # autoencoder.summary()
+    # autoencoder.encoder_model.summary()
+    # autoencoder.decoder_model.summary()
+    # optimizer = keras.optimizers.Adam(learning_rate=0.0001)
+    # autoencoder.compile(optimizer=optimizer, loss=keras.losses.mse)
+    #
+    # autoencoder.load_weights(path_net_traffic)
+    # autoencoder.__call__(tf.convert_to_tensor(np.random.random(56*window_size).reshape((1, window_size, 56)),
+    #                                           dtype=tf.float32))
+    # autoencoder.save(f"modeles\\TrafficAnomalyDetector\\{versia}\\model_TAD_v{versia}_one")

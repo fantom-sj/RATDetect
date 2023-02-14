@@ -258,24 +258,24 @@ if __name__ == '__main__':
     # ]
 
     datasets = [
-        "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\nonvpn_netflix.csv",
-        "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\nonvpn_skype-chat.csv",
-        "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\nonvpn_vimeo.csv",
-        "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\nonvpn_voip.csv",
-        "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\nonvpn_youtube.csv",
-        "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\RAT_rabbit_hole.csv",
-        "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\RAT_revenge.csv",
-        "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\traffic_browser_all.csv",
-        "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\traffic_normally.csv",
+        # "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\nonvpn_netflix.csv",
+        # "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\nonvpn_skype-chat.csv",
+        # "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\nonvpn_vimeo.csv",
+        # "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\nonvpn_voip.csv",
+        # "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\nonvpn_youtube.csv",
+        # "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\RAT_rabbit_hole.csv",
+        # "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\RAT_revenge.csv",
+        # "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\traffic_browser_all.csv",
+        # "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\traffic_normally.csv",
         "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\traffic_RAT_and_NoRAT.csv",
-        "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\traffic_RAT_NingaliNET.csv",
+        # "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\traffic_RAT_NingaliNET.csv",
         "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\train_dataset_VictimPC.csv",
-        "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\train_dataset_Nout.csv",
+        # "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\train_dataset_Nout.csv",
         "F:\\DataSets\\TRAFFIC\\Выбор характеристик\\test_dataset_VictimPC.csv",
     ]
 
     # merge_csv("F:\\DataSets\\TRAFFIC\\Выбор характеристик\\Для_анализа_характеристик.csv", datasets)
-    merge_csv("F:\\DataSets\\TRAFFIC\\Выбор характеристик\\train_megadataset_traffic.csv", datasets)
+    merge_csv("F:\\DataSets\\TRAFFIC\\Выбор характеристик\\train_megadataset_traffic_3.csv", datasets)
 
 
     # data = pd.read_csv("F:\\TRAFFIC\\Mytraffic\\traffic_RATRevenge\\RAT_revenge_0.csv")

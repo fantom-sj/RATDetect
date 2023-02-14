@@ -49,20 +49,30 @@ function print_chart(){
 }
 
 function appendPointInGraphEvents(data) {
-    //LineChartEvents.data.datasets.pop();
     for (let record of data) {
         label = record[0]
         loss  = record[1]
+
+        if (LineChartEvents.data.labels.length > max_records && max_records > 0){
+            r = LineChartEvents.data.labels.length - max_records;
+            for (i = 0; i < r; i++){
+                LineChartEvents.data.labels.shift();
+                LineChartEvents.data.datasets.forEach((dataset) => {
+                    dataset.data.shift();
+                });
+            }
+        }
+
         LineChartEvents.data.labels.push(label);
         LineChartEvents.data.datasets.forEach((dataset) => {
             dataset.data.push(loss);
         });
         widthDiagramEvents += 1
     }
-    LineChartEvents.canvas.parentNode.style.width = `${widthDiagramEvents}vh`
-    console.log(LineChartEvents.canvas.parentNode.style.width)
+    //LineChartEvents.canvas.parentNode.style.width = `${widthDiagramEvents}vh`
+    //console.log(LineChartEvents.canvas.parentNode.style.width)
     LineChartEvents.update();
-    $('#diagramEventsParent').animate({
+    /*$('#diagramEventsParent').animate({
         scrollLeft: `+=${widthDiagramEvents * 10}px`
-    }, "slow");
+    }, "slow");*/
 }

@@ -1,5 +1,5 @@
 
-var widthDiagramNetflow = 151
+var widthDiagramNetflow = 151;
 
 function print_chart(){
     var chart_netflow = document.getElementById("diagramNetflow");
@@ -49,22 +49,34 @@ function print_chart(){
 }
 
 function appendPointInGraphNetflow(data) {
-    //LineChartEvents.data.datasets.pop();
+    // ;
     for (let record of data) {
-        label = record[0]
-        loss  = record[1]
+        label = record[0];
+        loss  = record[1];
+
+        if (LineChartNetflow.data.labels.length > max_records && max_records > 0){
+            r = LineChartNetflow.data.labels.length - max_records;
+            for (i = 0; i < r; i++){
+                LineChartNetflow.data.labels.shift();
+                LineChartNetflow.data.datasets.forEach((dataset) => {
+                    dataset.data.shift();
+                });
+            }
+        }
+
         LineChartNetflow.data.labels.push(label);
         LineChartNetflow.data.datasets.forEach((dataset) => {
             dataset.data.push(loss);
         });
-        widthDiagramNetflow += 1
+        widthDiagramNetflow += 1;
     }
-    LineChartNetflow.canvas.parentNode.style.width = `${widthDiagramNetflow}vh`
+    //LineChartNetflow.canvas.parentNode.style.width = `${widthDiagramNetflow}vh`;
     //console.log(LineChartNetflow.canvas.parentNode.style.width)
     LineChartNetflow.update();
-    $('#diagramNetflowParent').animate({
+    /*$('#diagramNetflowParent').animate({
         scrollLeft: `+=${widthDiagramNetflow * 10}px`
-    }, "slow");
+    }, "slow");*/
 }
+
 
 

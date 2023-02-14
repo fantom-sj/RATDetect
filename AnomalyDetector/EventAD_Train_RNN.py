@@ -19,7 +19,7 @@ def main(versia, window_size, arhiteche):
     # staircase           = True
 
     # Параметры нейронной сети
-    epochs              = 3
+    epochs              = 5
     continue_education  = False
     checkpoint          = None
     checkpoint_epoch    = 0
@@ -30,7 +30,7 @@ def main(versia, window_size, arhiteche):
     path_model          = "modeles\\EventAnomalyDetector\\" + versia + "\\"
     model_name          = path_model + "model_EAD_v" + versia
     max_min_file        = path_model + "M&M_event.csv"
-    dataset             = "F:\\DataSets\\Для выбора характеристик\\Для обучения\\train_megadataset_events.csv"
+    dataset             = "D:\\train_characts_events.csv"
     history_name        = path_model + "history_train_v" + versia + ".csv"
     history_valid_name  = path_model + "history_valid_v" + versia + ".csv"
 
@@ -92,7 +92,7 @@ def main(versia, window_size, arhiteche):
     data = data.drop(["OperationName.SystemControl"], axis=1)
     print("Загрузка датасета завершена.")
 
-    training_dataset = TrainingDatasetGen(data, max_min_file, feature_range, checkpoint_epoch,
+    training_dataset = TrainingDatasetGen(data, max_min_file, feature_range,
                                           batch_size, window_size, validation_factor)
     print(training_dataset.numbs_count, training_dataset.characts_count)
 
@@ -144,7 +144,7 @@ def main(versia, window_size, arhiteche):
 
 
 if __name__ == '__main__':
-    versia = "0.7.0"
+    versia = "0.7.2"
     window_size = 1
 
     encoder = {"1_Input": (window_size, 89), "2_LSTM_seq": (70, 89), "3_LSTM_seq": (50, 70), "4_LSTM": (25, 50)}
@@ -153,4 +153,5 @@ if __name__ == '__main__':
 
     arhiteche = (encoder, decoder)
     print("\n\n" + versia)
-    main(versia, window_size, arhiteche)
+    with tf.name_scope("Events") as scope:
+        main(versia, window_size, arhiteche)

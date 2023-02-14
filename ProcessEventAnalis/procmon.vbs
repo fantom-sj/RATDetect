@@ -1,0 +1,1 @@
+CreateObject("WScript.Shell").Run """ProcessEventAnalis\Procmon64.exe"" /AcceptEula /BackingFile ""WorkDirectory\temp\event_log_1.pml"" /Runtime 30 /LoadConfig ""ProcessEventAnalis\ProcmonConfiguration.pmc"" /Quiet", 0, true

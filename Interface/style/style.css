@@ -14,6 +14,13 @@ html, body {
 	border-collapse: collapse;
 }
 
+.head_tbl {
+    text-align: left;
+    border-bottom: 0px !important;
+    font-weight: normal !important;
+    font-size: 20px;
+}
+
 .table th {
 	font-weight: bold;
 	padding: 5px;
@@ -37,3 +44,94 @@ html, body {
   overflow-x: scroll;
 }
 
+.wrapper {
+    background-color: #f4f6f9;
+}
+
+/* Список количества записей */
+* {
+    outline: 0 none;
+}
+select {
+    border: 1px solid #e0e0e0;
+    border-radius: 3px;
+    padding: 0 5px;
+    line-height: 36px;
+    height: 36px;
+    box-shadow: inset 1px 1px 1px 0px rgba(0, 0, 0, 0.1);
+    background: #fff;
+    width: 150px;
+}
+@-moz-document url-prefix() {
+    select {
+        -moz-appearance: none;
+    }
+    .select-fixff {
+        position: relative;
+        display: block;
+        float: right;
+    }
+    .select-fixff:before {
+        content: '';
+        display: table;
+    }
+    .select-fixff:after {
+        content: " ";
+        display: table;
+        clear: both;
+        right: 8px;
+        border: solid transparent;
+        height: 0;
+        width: 0;
+        position: absolute;
+        pointer-events: none;
+        border-color: #fff;
+        border-left-color: #333;
+        border-width: 4px;
+        top: 50%;
+        transform: rotate(90deg);
+    }
+}
+
+/* Кнопка включения выключения */
+.switch-fixff {
+    position: relative;
+    display: block;
+    float: left;
+    margin-top: 3px;
+}
+.switch-btn {
+    display: inline-block;
+    width: 62px; /* ширина переключателя */
+    height: 20px; /* высота переключателя */
+    border-radius: 12px; /* радиус скругления */
+    background: #bfbfbf; /* цвет фона */
+    z-index: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    transition-duration: 300ms; /* анимация */
+}
+.switch-btn::after {
+    content: "";
+    height: 30px; /* высота кнопки */
+    width: 30px; /* ширина кнопки */
+    border-radius: 18px; /* радиус кнопки */
+    background: #fff; /* цвет кнопки */
+    top: -6px; /* положение кнопки по вертикали относительно основы */
+    left: -6px; /* положение кнопки по горизонтали относительно основы */
+    transition-duration: 300ms; /* анимация */
+    box-shadow: 0 0 10px 0 #999999; /* тень */
+    position: absolute;
+    z-index: 1;
+}
+.switch-on {
+    background: #fff;
+    box-shadow: inset 0 0 10px 0 #999999; /* тень */
+}
+.switch-on::after {
+    left: 30px;
+    background: #526eff;
+}

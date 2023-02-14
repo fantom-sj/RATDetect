@@ -5,6 +5,11 @@
     <title>Система мониторинга RAT-троянов</title>
     <script type="text/javascript" src="/eel.js"></script>
 
+    <script src="plugins/jquery/jquery.min.js"></script>
+    <script src="plugins/jquery-ui/jquery-ui.min.js"></script>
+
+    <script type="text/javascript" src="plugins/Chart.js/chart.umd.js"></script>
+
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
     <link rel="stylesheet" href="plugins/fontawesome-free/css/all.min.css">
     <link rel="stylesheet" href="plugins/fontawesome-free/css/font-awesome.css">
@@ -12,10 +17,9 @@
     <link rel="stylesheet" href="style/adminlte.css">
     <link rel="stylesheet" href="style/style.css">
 
-    <script src="plugins/jquery/jquery.min.js"></script>
-    <script src="plugins/jquery-ui/jquery-ui.min.js"></script>
-
-    <script src="js/script.js"></script>
+    <script type="text/javascript" src="js/script.js"></script>
+    <script type="text/javascript" src="js/testcharts.js"></script>
+    <script type="text/javascript" src="js/testing.js"></script>
 
     <script>
       $(function(){
@@ -45,7 +49,57 @@
         <!-- Сам контент-->
         <section class="content">
           <div class="container-fluid">
+            <div id="TestingSys">
 
+              <div style="float: left; width: 50%; height: 50px; text-align: center;" >
+                <h3 class="m-0" style="font-size: 24px !important;">Анализ порций событий</h3>
+              </div>
+              <div style="float: left; width: 50%; height: 50px; text-align: center;" >
+                <h3 class="m-0" style="font-size: 24px !important;">Анализ процессов</h3>
+              </div>
+              <br>
+
+              <div style="float: left; width: 25%; height: 300px;" >
+                <div class="circleChartContainer" style="display: block; position: relative; width: 300px; height: 300px;">
+                  <canvas id="AnomalyProcessRatio" style="height:100%; width:100%"></canvas>
+                </div>
+              </div>
+
+              <div style="float: left; width: 25%; height: 300px;" >
+                <div class="circleChartContainer" style="display: block; position: relative; width: 300px; height: 300px;">
+                  <canvas id="NormalProcessRatio" style="height:100%; width:100%"></canvas>
+                </div>
+              </div>
+
+              <div style="float: left; width: 25%; height: 300px;" >
+                <div class="circleChartContainer" style="display: block; position: relative; width: 300px; height: 300px;">
+                  <canvas id="AnomalyProcess" style="height:100%; width:100%"></canvas>
+                </div>
+              </div>
+
+              <div style="float: left; width: 25%; height: 300px;" >
+                <div class="circleChartContainer" style="display: block; position: relative; width: 300px; height: 300px;">
+                  <canvas id="NormalProcess" style="height:100%; width:100%"></canvas>
+                </div>
+              </div>
+
+              <br>
+
+              <div style="float: left; width: 25%; height: 50px; text-align: center; margin-top: 10px;">
+                <h3 class="m-0" style="font-size: 20px !important;">Точность: 57,35%</h3>
+              </div>
+              <div style="float: left; width: 25%; height: 50px; text-align: center; margin-top: 10px;">
+                <h3 class="m-0" style="font-size: 20px !important;">Точность: 99,91%</h3>
+              </div>
+              <div style="float: left; width: 25%; height: 50px; text-align: center; margin-top: 10px;">
+                <h3 class="m-0" style="font-size: 20px !important;">Точность: 100%</h3>
+              </div>
+              <div style="float: left; width: 25%; height: 50px; text-align: center; margin-top: 10px;">
+                <h3 class="m-0" style="font-size: 20px !important;">Точность: 100%</h3>
+              </div>
+
+
+            </div>
           </div>
         </section>
       </div>
@@ -55,6 +109,7 @@
     <script>
       $(window).on("load", function() {
         $("#test").addClass("active");
+        printChartTesting();
       });
     </script>
   </body>

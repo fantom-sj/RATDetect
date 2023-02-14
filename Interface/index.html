@@ -17,8 +17,8 @@
     <link rel="stylesheet" href="style/adminlte.css">
     <link rel="stylesheet" href="style/style.css">
 
-    <script src="js/script.js"></script>
-    <script type="text/javascript" src="js/chart_event_loss.js"></script>
+    <script type="text/javascript" src="js/script.js"></script>
+    <script type="text/javascript" src="js/monitoring.js"></script>
 
     <script>
       $(function(){
@@ -48,7 +48,156 @@
         <!-- Сам контент-->
         <section class="content">
           <div class="container-fluid">
-            <div id="data_receiver">
+
+            <div id="DataAnalysisRes">
+              <div class="row">
+                <div class="col-sm-7" style="max-width: 290px !important;">
+                  <h5 class="m-0">Запуск процесса мониторинга</h5>
+                </div>
+                <span class="switch-fixff">
+                  <div class="switch-btn"></div>
+                </span>
+              </div>
+
+              <table width="100%">
+                <tr>
+                  <td colspan="2" >
+                    <table class="table">
+                      <thead>
+                        <tr>
+                          <td>
+                            <table width="100%">
+                              <tr>
+                                <th  colspan="5" class="head_tbl">
+                                  Процессы, проявляющие аномальную активность, характерную для RAT-троянов
+                                </th>
+                              </tr>
+
+                              <tr>
+                                <th width="14%" style="text-align: center; vertical-align: middle;">
+                                  IP устройства
+                                </th>
+                                <th width="18%" style="text-align: center; vertical-align: middle;">
+                                  Имя процесса
+                                </th>
+                                <th width="21%" style="text-align: center; vertical-align: middle;">
+                                  Процент<br>аномальных событий
+                                </th>
+                                <th width="21%" style="text-align: center; vertical-align: middle;">
+                                  Процент аномальных<br>сетевых потоков
+                                </th>
+                                <th width="26%" style="text-align: center; vertical-align: middle;">
+                                  Вероятность<br>принадлежности к RAT-трояну
+                                </th>
+                              </tr>
+                            </table>
+                          </td>
+                        </tr>
+                      </thead>
+                      <tbody scrollbars="yes">
+                      <tr>
+                        <td>
+                          <div id="recordsRAT" style="overflow-y: scroll; height: 150px;">
+                            <table width="100%" id="RAT_records">
+                              <tbody></tbody>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+
+                <tr>
+                  <td width="50%">
+                    <table class="table" width="100%">
+                      <thead>
+                        <tr>
+                          <td>
+                            <table width="100%"> <!--height="40"-->
+                              <tr>
+                                <th colspan="2" class="head_tbl">
+                                  Подозрительные процессы
+                                </th>
+                              </tr>
+
+                              <tr>
+                                <th rowspan="2" width="40%" style="text-align: center; vertical-align: middle;">
+                                  Имя процесса
+                                </th>
+                                <th colspan="2" width="60%" style="text-align: center; border-bottom: 0px !important;">
+                                  Количество наборов событий
+                                </th>
+                              </tr>
+                              <tr >
+                                <th style="text-align: center">Аномальных</th>
+                                <th style="text-align: center">Нормальных</th>
+                              </tr>
+                            </table>
+                          </td>
+                        </tr>
+                      </thead>
+                      <tbody scrollbars="yes">
+                      <tr>
+                        <td>
+                          <div id="recordsProcess" class="add-scroll">
+                            <table width="100%" id="AnomalyProcess">
+                              <tbody></tbody>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                      </tbody>
+                    </table>
+                  </td>
+
+                  <td width="50%">
+                    <table class="table" width="100%">
+                      <thead>
+                        <tr>
+                          <td>
+                            <table width="100%"> <!--height="40"-->
+                              <tr>
+                                <th colspan="2" class="head_tbl">
+                                  Подозрительные сетевые потоки
+                                </th>
+                              </tr>
+
+                              <tr>
+                                <th rowspan="2" width="40%" style="text-align: center; vertical-align: middle;">
+                                  IP адреса потока
+                                </th>
+                                <th colspan="2" width="60%" style="text-align: center; border-bottom: 0px !important;">
+                                  Количество сетевых потоков
+                                </th>
+                              </tr>
+                              <tr >
+                                <th style="text-align: center">Аномальных</th>
+                                <th style="text-align: center">Нормальных</th>
+                              </tr>
+                            </table>
+                          </td>
+                        </tr>
+                      </thead>
+                      <tbody scrollbars="yes" width="100%">
+                        <tr>
+                          <td>
+                            <div id="recordsNetFlow" class="add-scroll">
+                              <table width="100%" id="AnomalyNetFlow">
+                                <tbody></tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+
+
 
             </div>
           </div>
@@ -59,7 +208,22 @@
 
     <script>
       $(window).on("load", function() {
+        type_data = "data_analys_res";
         $("#monit").addClass("active");
+
+        eel.SendDataCash(type_data);
+      });
+
+      $('.switch-btn').click(function(){
+        $(this).toggleClass('switch-on');
+        if ($(this).hasClass('switch-on')) {
+          console.log("Мониторинг включён!");
+          eel.MonitorToggle(true);
+        }
+        else {
+          console.log("Мониторинг выключен!");
+          eel.MonitorToggle(false);
+        }
       });
     </script>
   </body>

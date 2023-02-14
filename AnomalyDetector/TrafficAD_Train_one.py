@@ -4,7 +4,7 @@ from pathlib import Path
 
 def main(versia, arhiteche, window_size):
     # Параметры датасета
-    batch_size          = 10
+    batch_size          = 100
     validation_factor   = 0.01
     feature_range       = (-1, 1)
 
@@ -18,8 +18,8 @@ def main(versia, arhiteche, window_size):
     epochs              = 3
     continue_education  = False
     checkpoint          = None
-    checkpoint_epoch    = 0
-    shaffle             = False
+    checkpoint_epoch    = None
+    shaffle             = True
     loss_func           = keras.losses.mse
     arhiteche           = arhiteche
     versia              = versia
@@ -30,16 +30,16 @@ def main(versia, arhiteche, window_size):
     history_name        = path_model + "history_train_v" + versia + ".csv"
     history_valid_name  = path_model + "history_valid_v" + versia + ".csv"
 
-    if continue_education:
-        if Path(path_model+"\\Checkpoint\\checkpoint").exists():
-            with open(path_model+"\\Checkpoint\\checkpoint", "r") as file:
-                str1 = file.readline()
-                idx = str1.find(': "') + 3
-                checkpoint = str1[idx:-2]
-                checkpoint_epoch = int(checkpoint[6:])
-                print(checkpoint_epoch)
-        else:
-            continue_education = False
+    # if continue_education:
+    #     if Path(path_model+"\\Checkpoint\\checkpoint").exists():
+    #         with open(path_model+"\\Checkpoint\\checkpoint", "r") as file:
+    #             str1 = file.readline()
+    #             idx = str1.find(': "') + 3
+    #             checkpoint = str1[idx:-2]
+    #             checkpoint_epoch = int(checkpoint[6:])
+    #             print(checkpoint_epoch)
+    #     else:
+    #         continue_education = False
 
     if not Path(path_model).exists():
         Path(path_model).mkdir()
@@ -48,7 +48,7 @@ def main(versia, arhiteche, window_size):
         Path(path_model + "Checkpoint\\").mkdir()
 
     data = pd.read_csv(dataset)
-    data = data[:10000]
+    # data = data.iloc[-10000:]
     print(f"Загружено {len(data)} характеристик")
     data = data.sort_values(by="Flow_Charact.Time_Stamp_Start")
 
@@ -97,7 +97,7 @@ def main(versia, arhiteche, window_size):
     print("Автоэнкодер определён.")
 
     if continue_education:
-        checkpoint_name = "modeles\\TrafficAnomalyDetector\\" + versia + "\\Checkpoint\\epoch_" + str(checkpoint)
+        checkpoint_name = "modeles\\TrafficAnomalyDetector\\" + versia + "\\Checkpoint\\" + str(checkpoint)
         autoencoder.load_weights(checkpoint_name)
         print("Продолжаем обучение:")
     else:
@@ -106,7 +106,7 @@ def main(versia, arhiteche, window_size):
 
     autoencoder.education(training_dataset, epochs=epochs, shaffle=shaffle,
                           model_checkname=path_model + "Checkpoint\\", versia=versia,
-                          path_model=path_model, checkpoint=checkpoint)
+                          path_model=path_model, checkpoint=checkpoint_epoch)
     autoencoder.save(model_name)
 
     pd.DataFrame(autoencoder.history_loss).to_csv(history_name, index=False)
@@ -114,10 +114,9 @@ def main(versia, arhiteche, window_size):
 
 
 if __name__ == '__main__':
-    versia = "1.4_test"
+    versia = "1.5"
 
     window_size = 1
-
     encoder = {"1_Input": (window_size, 51), "2_GRU_seq": (43, 51), "3_GRU_seq": (35, 43),
                "4_GRU_seq": (27, 35), "5_GRU_seq": (19, 27), "6_GRU": (11, 19)}
     decoder = {"7_RepeatVector": (window_size, None), "8_GRU_seq": (19, 11), "9_GRU_seq": (27, 19),
@@ -126,5 +125,5 @@ if __name__ == '__main__':
     arhiteche = (encoder, decoder)
     print("\n\n" + versia)
 
-    # with tf.name_scope("NetTraffic") as scope:
-    main(versia, arhiteche, window_size)
+    with tf.name_scope("NetTraffic") as scope:
+        main(versia, arhiteche, window_size)

@@ -29,20 +29,18 @@ class Events_Charact(Enum):
 
     Count_Success_Events    = 5  # Количество успешных событий +
 
-    # Количество событий разной класса
+    # Характеристики количества событий разного класса и категории
     Count_Event_Process        = 6  # Количество событий типа Process +
     Count_Event_Registry       = 7  # Количество событий типа Registry +
     Count_Event_File_System    = 8  # Количество событий типа File_System +
     Count_Event_Network        = 9  # Количество событий типа Network +
 
-    # Данные по категории событий: чтение и запись данных процессом
     Count_event_Read           = 10  # Количество событий относящихся к категории чтение +
     Count_event_Read_MetaD     = 11  # Количество событий относящихся к категории чтение метаданных +
     Count_event_Write          = 12  # Количество событий относящихся к категории записи +
     Count_event_Write_MetaD    = 13  # Количество событий относящихся к категории записи метаданных +
     Ratio_Read_on_Write        = 14  # Соотношение количества событий на чтения и записи +
 
-    # Основные события работы с файловой системой
     Count_ReadFile           = 15  # Количество событий на чтение фала +
     Count_CreateFile         = 16  # Количество событий на создание фала +
     Count_WriteFile          = 17  # Количество запросов на запись файла +
@@ -64,10 +62,10 @@ class Events_Charact(Enum):
     Min_Write_Length   = 54  # Минимальный объем записанной на диск информации в рамках одного события +
     Std_Write_Length   = 55  # Стандартное отклонение объема записанной на диск информации в рамках одного события +
 
-    # Скорость чтения / записи и другие временные характеристики
-    Speed_Read_Data          = 56  # Скорость чтения данных +
-    Speed_Write_Data         = 57  # Скорость записи данных +
+    Speed_Read_Data          = 56  # Скорость чтения данных + !!!Не используется!!!
+    Speed_Write_Data         = 57  # Скорость записи данных + !!!Не используется!!!
 
+    # Характеристики активности процесса
     Mean_Active_Time_Process = 58  # Среднее время активности процесса +
     Max_Active_Time_Process  = 59  # Максимальное время активности процесса +
     Min_Active_Time_Process  = 60  # Минимальное время активности процесса +
@@ -78,24 +76,23 @@ class Events_Charact(Enum):
     Min_InActive_Time_Process  = 64  # Минимальное время не активности процесса +
     Std_InActive_Time_Process  = 65  # Стандартное отклонение времени не активности процесса +
 
-    # Колличесво обращений к различным корневым веткам реестра
+    # Характеристики работы процесса с реестром
     Appeal_reg_HKCR    = 85  # Количество обращений в ветке реестра HKCR +
     Appeal_reg_HKCU    = 86  # Количество обращений в ветке реестра HKCU +
     Appeal_reg_HKLM    = 87  # Количество обращений в ветке реестра HKLM +
     Appeal_reg_HKU     = 88  # Количество обращений в ветке реестра HKU +
-    Appeal_reg_HKCC    = 89  # Количество обращений в ветке реестра HKCC +
+    Appeal_reg_HKCC    = 89  # Количество обращений в ветке реестра HKCC + !!!Не используется!!!
 
     Count_Unique_Reg_Path = 84  # Количество уникальных путей обращения к ключам реестра +
 
-    # Количество событий UDP и TCP
+    # Характеристики сетевой активности процесса
     Count_TCP_Events        = 98  # Количество TCP событий +
     Count_UDP_Events        = 99  # Количество UDP событий +
 
-    # Статистические характеристики сетевых событий в рамках порции
     Ratio_Connect_on_Disconnect = 100  # Соотношение инициированных и завершенных сетевых соединений +
     Ratio_Send_on_Receive       = 101  # Соотношение количества событий отправки и получения +
-    Ratio_Send_on_Accept        = 102  # Соотношение количества событий отправки и принятия +
-    Ratio_Receive_on_Accept     = 103  # Соотношение количества событий получения и принятия +
+    Ratio_Send_on_Accept        = 102  # Соотношение количества событий отправки и принятия + !!!Не используется!!!
+    Ratio_Receive_on_Accept     = 103  # Соотношение количества событий получения и принятия + !!!Не используется!!!
 
     Count_Send_Length = 104  # Размер отправленной по сети информации +
     Mean_Send_Length  = 105  # Средний размер отправляемой по сети информации в одно событие +
@@ -114,46 +111,46 @@ class Events_Charact(Enum):
     Count_Unique_Ports_dst  = 116  # Количество уникальных портов назначения +
     Ratio_src_on_dst_Ports  = 124  # Соотношение количества уникальных портов источника и назначения +
 
-    # Количество событий процессов различных типов
-    Count_Process_Defined       = 117  # Количество событий определения процесса
+    # Характеристики работы процесса в многопоточном режиме
+    Count_Process_Defined       = 117  # Количество событий определения процесса !!!Не используется!!!
     Count_Thread_Create         = 118  # Количество событий создания потоков
     Count_Thread_Exit           = 119  # Количество событий завершения потоков
     Count_Load_Image            = 120  # Количество событий загрузки образа
-    Count_Thread_Profile        = 121  # Количество событий профилирования потока
+    Count_Thread_Profile        = 121  # Количество событий профилирования потока !!!Не используется!!!
     Count_Process_Start         = 122  # Количество событий запуска процесса
 
     Duration = 123  # Длительность порции событий +
 
 
 class OperationName(Enum):
-    # Количество различных операций с файловой системой
-    VolumeDismount             = 20  # +
-    VolumeMount                = 21  # +
+    # Характеристики работы процесса с файловой системой
+    VolumeDismount             = 20  # + !!!Не используется!!!
+    VolumeMount                = 21  # + !!!Не используется!!!
     QueryOpen                  = 22  # +
     CreateFileMapping          = 23  # +
-    CreatePipe                 = 24  # +
-    QueryInformationFile       = 25  # +
-    SetInformationFile         = 26  # +
+    CreatePipe                 = 24  # + !!!Не используется!!!
+    QueryInformationFile       = 25  # + !!!Не используется!!!
+    SetInformationFile         = 26  # + !!!Не используется!!!
     QueryEAFile                = 27  # +
-    SetEAFile                  = 28  # +
+    SetEAFile                  = 28  # + !!!Не используется!!!
     FlushBuffersFile           = 29  # +
-    QueryVolumeInformation     = 30  # +
-    SetVolumeInformation       = 31  # +
-    DirectoryControl           = 32  # +
-    FileSystemControl          = 33  # +
+    QueryVolumeInformation     = 30  # + !!!Не используется!!!
+    SetVolumeInformation       = 31  # + !!!Не используется!!!
+    DirectoryControl           = 32  # + !!!Не используется!!!
+    FileSystemControl          = 33  # + !!!Не используется!!!
     DeviceIoControl            = 34  # +
-    InternalDeviceIoControl    = 35  # +
-    LockUnlockFile             = 36  # +
-    CreateMailSlot             = 37  # +
+    InternalDeviceIoControl    = 35  # + !!!Не используется!!!
+    LockUnlockFile             = 36  # + !!!Не используется!!!
+    CreateMailSlot             = 37  # + !!!Не используется!!!
     QuerySecurityFile          = 38  # +
     SetSecurityFile            = 39  # +
     SystemControl              = 40  # +
-    DeviceChange               = 41  # +
-    QueryFileQuota             = 42  # +
-    SetFileQuota               = 43  # +
-    PlugAndPlay                = 44  # +
+    DeviceChange               = 41  # + !!!Не используется!!!
+    QueryFileQuota             = 42  # + !!!Не используется!!!
+    SetFileQuota               = 43  # + !!!Не используется!!!
+    PlugAndPlay                = 44  # + !!!Не используется!!!
 
-    # Количество различных операций с реестром
+    # Характеристики работы процесса с реестром
     OpenKey                  = 66  # Количество событий открытия ключа реестра +
     CreateKey                = 67  # Количество событий создания ключа реестра +
     CloseKey                 = 68  # Количество событий закрытия ключа реестра +
@@ -165,15 +162,15 @@ class OperationName(Enum):
     SetInfoKey               = 74  # Количество событий установки информационного ключа +
     DeleteKey                = 75  # Количество событий удаления ключа реестра +
     DeleteValue              = 76  # Количество событий удаления значения ключа реестра ++
-    FlushKey                 = 77  # Количество событий установки Flush-ключа реестра +
-    LoadKey                  = 78  # Количество событий загрузки ключа реестра +
-    UnloadKey                = 79  # Количество событий выгрузки ключа реестра +
-    RenameKey                = 80  # Количество событий переименования ключа реестра +
+    FlushKey                 = 77  # Количество событий установки Flush-ключа реестра + !!!Не используется!!!
+    LoadKey                  = 78  # Количество событий загрузки ключа реестра + !!!Не используется!!!
+    UnloadKey                = 79  # Количество событий выгрузки ключа реестра + !!!Не используется!!!
+    RenameKey                = 80  # Количество событий переименования ключа реестра + !!!Не используется!!!
     QueryMultipleValueKey    = 81  # Количество запросов ключа с несколькими значениями +
-    SetKeySecurity           = 82  # Количество событий установки ключа безопасности +
+    SetKeySecurity           = 82  # Количество событий установки ключа безопасности + !!!Не используется!!!
     QueryKeySecurity         = 83  # Количество запросов ключа безопасности +
 
-    # Количество различных операций с реестром
+    # Характеристики сетевой активности процесса
     Connect       = 90  # Количество инициированных сетевых соединений +
     Disconnect    = 91  # Количество завершённых сетевых соединений +
     Send          = 92  # Количество событий отправки информации по сети +
@@ -196,7 +193,7 @@ Event_Charact = [
 ]
 
 
-def CulcCharactsEventsOnWindow(events, user_dir):
+def CulcCharactsEventsOnWindow(events, user_dir, HOST_IP):
     characts = {}
     for ch_name in Events_Charact:
         characts[ch_name] = 0
@@ -351,7 +348,7 @@ def CulcCharactsEventsOnWindow(events, user_dir):
                                 port_dst = port_dst_str
 
                         if direction_check:
-                            direction = str(ip_dst) + ":" + str(port_dst)
+                            direction = str(HOST_IP) + ":" + str(ip_dst) + ":" + str(port_dst)
                             if characts[Events_Charact.Direction_IP_Port] is None:
                                 characts[Events_Charact.Direction_IP_Port] = direction
                             elif not direction in characts[Events_Charact.Direction_IP_Port]:
